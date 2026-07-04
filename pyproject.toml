@@ -1,0 +1,28 @@
+[project]
+name = "hermes-updater"
+version = "0.1.0"
+description = "Hermes Agent / Hermes WebUI の更新チェック・通知・適用を行うWindowsシステムトレイ常駐アプリ"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = [
+    "pystray>=0.19.5",
+    "Pillow>=10.0.0",
+    "win11toast>=0.35",
+    "requests>=2.31.0",
+]
+
+[project.scripts]
+hermes-updater = "hermes_updater.__main__:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
