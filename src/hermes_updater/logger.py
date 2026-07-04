@@ -14,15 +14,8 @@ _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 _configured = False
 
 
-def setup_logging(
-    base_dir: Path | None = None, level: int = logging.INFO, console: bool = True
-) -> logging.Logger:
-    """ルートロガーに5MB×5世代のRotatingFileHandlerを設定する。二重設定は防止する。
-
-    `console=False`の場合はコンソールへの出力を行わない。トレイ常駐モードは本来
-    コンソールを持たない(`pythonw.exe`起動)ため出力先が無く、誤って`python.exe`で
-    起動された場合にログがコンソールウィンドウに流れ続けて表示され続けるのを防ぐ。
-    """
+def setup_logging(base_dir: Path | None = None, level: int = logging.INFO) -> logging.Logger:
+    """ルートロガーに5MB×5世代のRotatingFileHandlerを設定する。二重設定は防止する。"""
     global _configured
     root = logging.getLogger("hermes_updater")
     root.setLevel(level)
@@ -41,10 +34,9 @@ def setup_logging(
     file_handler.setFormatter(formatter)
     root.addHandler(file_handler)
 
-    if console:
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        root.addHandler(console_handler)
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    root.addHandler(console_handler)
 
     _configured = True
     return root
