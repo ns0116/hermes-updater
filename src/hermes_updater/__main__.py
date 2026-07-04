@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import argparse
-import ctypes
 import sys
 
 from hermes_updater.app import UpdaterApp
@@ -21,19 +20,12 @@ for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
         _stream.reconfigure(encoding="utf-8", errors="replace")
 
-
-def _hide_own_console_window() -> None:
-    """トレイ常駐モード起動時、自プロセスにコンソールが割り当てられていれば非表示にする。
-
-    本来`pythonw.exe`起動ではコンソールは存在しないが、スケジュールタスクの登録ミスや
-    手動での`python.exe -m hermes_updater`実行など、`python.exe`経由で起動された場合には
-    黒いコンソールウィンドウが表示されたままになる。トレイ常駐アプリとしての体験を
-    損なわないよう、そのウィンドウを非表示にする(ウィンドウが無ければ何もしない)。
-    """
-    hwnd = ctypes.windll.kernel32.GetConsoleWindow()
-    if hwnd:
-        SW_HIDE = 0
-        ctypes.windll.user32.ShowWindow(hwnd, SW_HIDE)
+# 注意: トレイ常駐モードで`python.exe`経由(コンソールサブシステム)で誤って起動された場合、
+# Windows 11既定のWindows Terminalはプロセス生成と同時にウィンドウを開く。これはOS側の
+# プロセス起動処理でこちらのコードが動く前に発生するため、起動後に`ShowWindow`や
+# `FreeConsole`をいくら呼んでも後から閉じることはできない(検証済み)。そのため
+# 「起動後に隠す」対策は行わない。唯一の正しい対策は常に`pythonw.exe`(GUIサブシステム)
+# で起動すること(`install/create-scheduled-task.ps1`はこれに準拠している)。
 
 
 def _print_check_result(result) -> None:
@@ -62,8 +54,6 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     is_tray_mode = not (args.check or args.apply or args.status)
-    if is_tray_mode:
-        _hide_own_console_window()
     setup_logging(console=not is_tray_mode)
     app = UpdaterApp()
 
