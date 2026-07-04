@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import sys
 
 from hermes_updater.app import UpdaterApp
@@ -19,6 +20,20 @@ from hermes_updater.logger import setup_logging
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
         _stream.reconfigure(encoding="utf-8", errors="replace")
+
+
+def _hide_own_console_window() -> None:
+    """トレイ常駐モード起動時、自プロセスにコンソールが割り当てられていれば非表示にする。
+
+    本来`pythonw.exe`起動ではコンソールは存在しないが、スケジュールタスクの登録ミスや
+    手動での`python.exe -m hermes_updater`実行など、`python.exe`経由で起動された場合には
+    黒いコンソールウィンドウが表示されたままになる。トレイ常駐アプリとしての体験を
+    損なわないよう、そのウィンドウを非表示にする(ウィンドウが無ければ何もしない)。
+    """
+    hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+    if hwnd:
+        SW_HIDE = 0
+        ctypes.windll.user32.ShowWindow(hwnd, SW_HIDE)
 
 
 def _print_check_result(result) -> None:
@@ -46,7 +61,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--status", action="store_true", help="現在の永続状態を表示する")
     args = parser.parse_args(argv)
 
-    setup_logging()
+    is_tray_mode = not (args.check or args.apply or args.status)
+    if is_tray_mode:
+        _hide_own_console_window()
+    setup_logging(console=not is_tray_mode)
     app = UpdaterApp()
 
     if args.check:
