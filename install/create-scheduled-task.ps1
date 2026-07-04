@@ -58,38 +58,6 @@ if (-not (Test-Path $PythonwExe)) {
     throw "pythonw.exe not found after venv creation: $PythonwExe"
 }
 
-# --- 2.5. pythonw.exeがGUIサブシステムかどうかを検証し、必要なら修復する ---
-# uv 0.11.26時点で、`uv venv`が生成する venv\Scripts\pythonw.exe が python.exe と同一の
-# コンソールサブシステム版になってしまう既知の不具合を確認している(pyvenv.cfgの`home`が
-# 指すベースインストールのpythonw.exe自体は正しくGUIサブシステム)。放置すると
-# トレイ常駐時にタスクスケジューラがpythonw.exeを正しく指定していても、Windows 11の
-# 既定端末アプリ(Windows Terminal)がコンソールウィンドウを表示し続けてしまう。
-function Test-IsGuiSubsystemExe([string]$ExePath) {
-    $bytes = [System.IO.File]::ReadAllBytes($ExePath)
-    $peOffset = [BitConverter]::ToInt32($bytes, 0x3C)
-    $subsystem = [BitConverter]::ToUInt16($bytes, $peOffset + 4 + 20 + 68)
-    return $subsystem -eq 2
-}
-
-if (-not (Test-IsGuiSubsystemExe $PythonwExe)) {
-    Write-Host "==> pythonw.exe is not a GUI-subsystem executable (known uv venv issue). Repairing..."
-    $pyvenvCfgPath = Join-Path $VenvDir "pyvenv.cfg"
-    $homeLine = Get-Content $pyvenvCfgPath | Where-Object { $_ -match '^\s*home\s*=' } | Select-Object -First 1
-    if (-not $homeLine) {
-        throw "Cannot repair pythonw.exe: 'home' entry not found in $pyvenvCfgPath"
-    }
-    $homeDir = ($homeLine -split '=', 2)[1].Trim()
-    $sourcePythonw = Join-Path $homeDir "pythonw.exe"
-    if (-not (Test-Path $sourcePythonw)) {
-        throw "Cannot repair pythonw.exe: source not found at $sourcePythonw"
-    }
-    if (-not (Test-IsGuiSubsystemExe $sourcePythonw)) {
-        throw "Cannot repair pythonw.exe: base interpreter's pythonw.exe at $sourcePythonw is also not GUI-subsystem"
-    }
-    Copy-Item -Path $sourcePythonw -Destination $PythonwExe -Force
-    Write-Host "    Repaired: copied GUI pythonw.exe from $sourcePythonw"
-}
-
 # --- 3. ログオントリガーのタスクスケジューラ登録 ---
 Write-Host "==> Registering scheduled task '$TaskName' (AtLogOn, interactive user)..."
 
