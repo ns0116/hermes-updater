@@ -20,6 +20,17 @@ for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
         _stream.reconfigure(encoding="utf-8", errors="replace")
 
+# AUMID(AppUserModelID)未設定だとタスクバー設定・トースト通知の送信元表示が
+# pythonw.exe起動時の既定識別情報(「Python」)にフォールバックしてしまうため、
+# トレイアイコン・トースト通知を扱う前に明示設定する(GitHub Issue #3)。
+if sys.platform == "win32":
+    import ctypes
+
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("HermesUpdater.TrayApp.1")
+    except OSError:
+        pass
+
 
 def _print_check_result(result) -> None:
     print(f"agent_behind={result.agent_behind} webui_behind={result.webui_behind}")

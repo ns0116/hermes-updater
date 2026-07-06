@@ -9,6 +9,7 @@
 - トレイアイコンのダブルクリック(既定メニュー項目「Hermesを開く」)でHermesのデスクトップアプリを起動できるように。デスクトップアプリ実行ファイル→スタートメニューショートカット→WebUIブラウザ起動、の順にフォールバックする([Issue #2](https://github.com/ns0116/hermes-updater/issues/2))
 
 ### Fixed
+- 起動時にAppUserModelID(`HermesUpdater.TrayApp.1`)を明示設定し、タスクバー設定の「アイコンの表示設定」一覧・トースト通知の送信元表示が`pythonw.exe`起因の「Python」表示になっていた問題を修正([Issue #3](https://github.com/ns0116/hermes-updater/issues/3))
 - 専用venvのベースインタプリタをPython 3.13(システム既定)に切り替え。従来は`uv venv --python 3.11`が`hermes-agent`のvenvと同じuvキャッシュ済みcpython-3.11ビルドを共有しており、「hermes-agentのvenvとは完全に独立」という設計意図に反していた。実機検証でこのcpython-3.11ビルド固有の不具合(`pythonw.exe`が`python.exe`と同一のコンソールサブシステムで生成され、常駐起動時にウィンドウが表示され続ける。[Issue #1](https://github.com/ns0116/hermes-updater/issues/1))も確認しており、Python 3.13への切り替えでこの不具合自体を回避した。
 - `install/create-scheduled-task.ps1`に、`pythonw.exe`がGUIサブシステムでない場合の修復ロジックを(念のためのフォールバックとして)追加。venv自身の`python.exe`(動作確認済みの起動スタブ)を複製し、PEヘッダのSubsystemフィールドのみ書き換える方式。過去に試みた「ベースインストール側の実体を持つ`pythonw.exe`をそのままコピーする」方式は、隣接する`python3xx.dll`への依存により`venv\Scripts`直下では`STATUS_DLL_NOT_FOUND`で起動不能を引き起こすことが判明したため採用していない。
 
