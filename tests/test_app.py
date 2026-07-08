@@ -48,6 +48,33 @@ def test_check_now_no_notification_when_notifications_disabled(tmp_path, monkeyp
     assert app.state.pending_update is True
 
 
+def test_on_check_complete_fires_every_check_regardless_of_notify_dedup(tmp_path, monkeypatch):
+    result = CheckResult(agent_behind=2, webui_behind=0, source="webui_api")
+    app = _make_app(tmp_path, monkeypatch, result)
+    completed = []
+    app.on_check_complete = lambda r: completed.append(r)
+
+    app.check_now()
+    app.check_now()  # 通知は重複排除されるが、on_check_completeは毎回呼ばれる
+
+    assert len(completed) == 2
+
+
+def test_on_check_complete_fires_when_update_resolves(tmp_path, monkeypatch):
+    result = CheckResult(agent_behind=2, webui_behind=0, source="webui_api")
+    app = _make_app(tmp_path, monkeypatch, result)
+    completed = []
+    app.on_check_complete = lambda r: completed.append(r)
+
+    app.check_now()
+    updater.check_updates = lambda config: CheckResult(agent_behind=0, webui_behind=0, source="webui_api")
+    app.check_now()
+
+    assert len(completed) == 2
+    assert completed[0].has_update is True
+    assert completed[1].has_update is False
+
+
 def test_apply_now_aggregates_success_and_error(tmp_path, monkeypatch):
     app = UpdaterApp(base_dir=tmp_path)
     monkeypatch.setattr(

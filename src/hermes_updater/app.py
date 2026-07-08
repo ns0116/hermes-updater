@@ -41,6 +41,8 @@ class UpdaterApp:
         # UI/通知層から差し込まれるコールバック。CheckResultを受け取る。
         self.on_update_available: Optional[Callable[[CheckResult], None]] = None
         self.on_check_undetermined: Optional[Callable[[CheckResult], None]] = None
+        # 通知の要否に関わらず、チェック完了のたびに必ず呼ばれる(アイコン表示の更新用)。
+        self.on_check_complete: Optional[Callable[[CheckResult], None]] = None
 
     def reload_config(self) -> None:
         with self._lock:
@@ -105,6 +107,11 @@ class UpdaterApp:
                 self.on_check_undetermined(result)
             except Exception:
                 log.exception("on_check_undetermined callback failed")
+        if self.on_check_complete:
+            try:
+                self.on_check_complete(result)
+            except Exception:
+                log.exception("on_check_complete callback failed")
         return result
 
     def apply_now(self, targets: Iterable[str]) -> dict[str, ApplyResult]:
