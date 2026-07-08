@@ -179,10 +179,27 @@ def _kill_webui_process(config: UpdateConfig, steps: list[StepResult]) -> Option
     if kill_result.elevation_denied:
         steps.append(StepResult("taskkill_webui", False, "elevation denied by user"))
         return "uac_denied"
-    steps.append(StepResult("taskkill_webui", kill_result.success, kill_result.stdout or kill_result.stderr))
     if not kill_result.success:
+        # taskkillはUAC昇格(Start-Process -Verb RunAs -Wait)を経由するため実行までに
+        # 数秒〜10秒のラグがあり、その間にWebUI自身の自己再起動(update APIの
+        # restart_scheduled)で対象PIDが既に終了していることがある(EXITCODE:128 =
+        # 対象PIDが既に存在しない。Issue #6)。ポートを再確認し、既に未使用なら
+        # 結果的に停止済みとみなして成功扱いにする。
+        recheck_pid = shell.find_pid_by_port(config.webui_port)
+        if recheck_pid is None:
+            steps.append(
+                StepResult(
+                    "taskkill_webui",
+                    True,
+                    f"taskkill failed ({kill_result.stdout or kill_result.stderr}) but port no longer "
+                    "in use; process already stopped",
+                )
+            )
+            return None
+        steps.append(StepResult("taskkill_webui", False, kill_result.stdout or kill_result.stderr))
         log.error("Failed to kill WebUI process (PID %s)", pid)
         return "taskkill_failed"
+    steps.append(StepResult("taskkill_webui", True, kill_result.stdout or kill_result.stderr))
     return None
 
 
