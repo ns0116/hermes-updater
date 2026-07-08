@@ -4,12 +4,19 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-07-08
+
+### Fixed
+- `on_update_available`は`has_update=True`の場合のみ呼ばれるため、更新解消時にトレイアイコンを`icon_idle`へ戻す経路が存在しなかった問題を修正。チェック完了のたびに必ず呼ばれる`on_check_complete`コールバックを追加し、通知の要否とは独立にアイコン表示を毎回最新状態へ反映するようにした([Issue #5](https://github.com/ns0116/hermes-updater/issues/5))
+- `_kill_webui_process`で、taskkillが失敗した場合にポートを再確認し、既に未使用(＝WebUI自身の自己再起動により対象プロセスが結果的に終了済み)であれば`taskkill_failed`ではなく成功扱いにするよう修正。WebUIとAgentを同時に更新した際、WebUIの非同期自己再起動とAgent側のkill処理(UAC昇格の数秒〜10秒のラグ中)がレースし、taskkillが`EXITCODE:128`(対象PIDが既に存在しない)で失敗してAgent側の`hermes update --yes`が不要にスキップされていた問題を解消する([Issue #6](https://github.com/ns0116/hermes-updater/issues/6))
+
+## [1.0.0] - 2026-07-07
+
 ### Added
 - トレイアイコンを`hermes-agent`の公式ロゴ(`website/static/img/`配下から自動検出)を使った表示に変更。状態(通常/更新あり/要確認)は右下の色分けバッジ(緑/オレンジ/赤)で表現する。ロゴが見つからない場合は従来の動的生成アイコンにフォールバックする([Issue #2](https://github.com/ns0116/hermes-updater/issues/2))
 - トレイアイコンのダブルクリック(既定メニュー項目「Hermesを開く」)でHermesのデスクトップアプリを起動できるように。デスクトップアプリ実行ファイル→スタートメニューショートカット→WebUIブラウザ起動、の順にフォールバックする([Issue #2](https://github.com/ns0116/hermes-updater/issues/2))
 
 ### Fixed
-- `_kill_webui_process`で、taskkillが失敗した場合にポートを再確認し、既に未使用(＝WebUI自身の自己再起動により対象プロセスが結果的に終了済み)であれば`taskkill_failed`ではなく成功扱いにするよう修正。WebUIとAgentを同時に更新した際、WebUIの非同期自己再起動とAgent側のkill処理(UAC昇格の数秒〜10秒のラグ中)がレースし、taskkillが`EXITCODE:128`(対象PIDが既に存在しない)で失敗してAgent側の`hermes update --yes`が不要にスキップされていた問題を解消する([Issue #6](https://github.com/ns0116/hermes-updater/issues/6))
 - 起動時にAppUserModelID(`HermesUpdater.TrayApp.1`)を明示設定し、タスクバー設定の「アイコンの表示設定」一覧・トースト通知の送信元表示が`pythonw.exe`起因の「Python」表示になっていた問題を修正([Issue #3](https://github.com/ns0116/hermes-updater/issues/3))
 - 専用venvのベースインタプリタをPython 3.13(システム既定)に切り替え。従来は`uv venv --python 3.11`が`hermes-agent`のvenvと同じuvキャッシュ済みcpython-3.11ビルドを共有しており、「hermes-agentのvenvとは完全に独立」という設計意図に反していた。実機検証でこのcpython-3.11ビルド固有の不具合(`pythonw.exe`が`python.exe`と同一のコンソールサブシステムで生成され、常駐起動時にウィンドウが表示され続ける。[Issue #1](https://github.com/ns0116/hermes-updater/issues/1))も確認しており、Python 3.13への切り替えでこの不具合自体を回避した。
 - `install/create-scheduled-task.ps1`に、`pythonw.exe`がGUIサブシステムでない場合の修復ロジックを(念のためのフォールバックとして)追加。venv自身の`python.exe`(動作確認済みの起動スタブ)を複製し、PEヘッダのSubsystemフィールドのみ書き換える方式。過去に試みた「ベースインストール側の実体を持つ`pythonw.exe`をそのままコピーする」方式は、隣接する`python3xx.dll`への依存により`venv\Scripts`直下では`STATUS_DLL_NOT_FOUND`で起動不能を引き起こすことが判明したため採用していない。
