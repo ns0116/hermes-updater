@@ -190,6 +190,38 @@ def test_apply_agent_update_taskkill_failed_still_restarts_webui(monkeypatch):
     assert "webui_health_check" in step_names
 
 
+def test_apply_agent_update_taskkill_failed_but_port_freed_is_treated_as_stopped(monkeypatch):
+    # Issue #6: UAC昇格のラグ中にWebUI自身の自己再起動で対象PIDが既に終了していた場合
+    # (taskkill EXITCODE:128相当)、ポート再確認で未使用ならkillは成功扱いにすべき。
+    calls = []
+    port_lookups = [4821, None]  # 1回目=kill対象PID特定、2回目=taskkill失敗後の再確認
+
+    def fake_run(args, timeout=None):
+        if "version" in args:
+            return ShellResult(0, stdout="Hermes Agent v1.0\nUp to date\n")
+        return ShellResult(0)
+
+    monkeypatch.setattr(shell, "run", fake_run)
+    monkeypatch.setattr(shell, "find_pid_by_port", lambda port: port_lookups.pop(0))
+    monkeypatch.setattr(
+        shell, "taskkill_pid", lambda pid, elevated=True: ShellResult(128, stdout="EXITCODE:128")
+    )
+    monkeypatch.setattr(
+        shell, "start_scheduled_task", lambda name, timeout=30: calls.append("restart") or ShellResult(0)
+    )
+    monkeypatch.setattr(shell, "wait_for_health", lambda url, retries=10, delay=2.0: True)
+
+    result = updater.apply_agent_update(_cfg())
+
+    assert "restart" in calls
+    assert result.success is True
+    assert result.aborted_reason is None
+    step_names = [s.name for s in result.steps]
+    assert "hermes_update" in step_names, "ポート再確認で停止済みと判明したらhermes updateを続行すべき"
+    taskkill_step = next(s for s in result.steps if s.name == "taskkill_webui")
+    assert taskkill_step.success is True
+
+
 def test_apply_agent_update_uac_denied_aborts_without_restart(monkeypatch):
     calls = []
     monkeypatch.setattr(shell, "run", lambda args, timeout=None: ShellResult(0))
