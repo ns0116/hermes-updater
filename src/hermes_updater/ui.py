@@ -119,14 +119,22 @@ def run_tray_app(app: UpdaterApp) -> None:
 
     def on_update_available(result: CheckResult) -> None:
         notifier.notify_update_available(result)
-        icon.icon = icon_pending if result.has_update else icon_idle
 
     def on_check_undetermined(result: CheckResult) -> None:
         notifier.notify_check_undetermined(result)
-        icon.icon = icon_attention
+
+    def on_check_complete(result: CheckResult) -> None:
+        # 通知の要否とは無関係に、チェックのたびに必ずアイコンを最新状態へ反映する
+        if result.undetermined:
+            icon.icon = icon_attention
+        elif result.has_update:
+            icon.icon = icon_pending
+        else:
+            icon.icon = icon_idle
 
     app.on_update_available = on_update_available
     app.on_check_undetermined = on_check_undetermined
+    app.on_check_complete = on_check_complete
 
     def check_now_action(icon, item):
         threading.Thread(target=app.check_now, daemon=True).start()
