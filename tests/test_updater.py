@@ -255,6 +255,44 @@ def test_apply_agent_update_gateway_stop_failure_is_logged_honestly(monkeypatch)
     assert gateway_step.success is False
 
 
+def test_apply_agent_update_invokes_on_step_for_each_step(monkeypatch):
+    def fake_run(args, timeout=None):
+        if "version" in args:
+            return ShellResult(0, stdout="Hermes Agent v1.0\nUp to date\n")
+        return ShellResult(0)
+
+    monkeypatch.setattr(shell, "run", fake_run)
+    monkeypatch.setattr(shell, "find_pid_by_port", lambda port: None)
+    monkeypatch.setattr(shell, "start_scheduled_task", lambda name, timeout=30: ShellResult(0))
+    monkeypatch.setattr(shell, "wait_for_health", lambda url, retries=10, delay=2.0: True)
+
+    seen = []
+    result = updater.apply_agent_update(_cfg(), on_step=lambda step: seen.append(step.name))
+
+    assert seen == [s.name for s in result.steps]
+    assert "hermes_update" in seen
+    assert "restart_webui_task" in seen
+
+
+def test_apply_agent_update_on_step_exception_does_not_abort_sequence(monkeypatch):
+    def fake_run(args, timeout=None):
+        if "version" in args:
+            return ShellResult(0, stdout="Hermes Agent v1.0\nUp to date\n")
+        return ShellResult(0)
+
+    monkeypatch.setattr(shell, "run", fake_run)
+    monkeypatch.setattr(shell, "find_pid_by_port", lambda port: None)
+    monkeypatch.setattr(shell, "start_scheduled_task", lambda name, timeout=30: ShellResult(0))
+    monkeypatch.setattr(shell, "wait_for_health", lambda url, retries=10, delay=2.0: True)
+
+    def boom(step):
+        raise RuntimeError("callback exploded")
+
+    result = updater.apply_agent_update(_cfg(), on_step=boom)
+
+    assert result.success is True
+
+
 def test_apply_agent_update_success_path(monkeypatch):
     def fake_run(args, timeout=None):
         if "version" in args:

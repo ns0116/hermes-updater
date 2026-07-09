@@ -27,6 +27,25 @@ _ABORTED_REASON_MESSAGES = {
     "webui_pull_failed": "WebUIのgit pullに失敗しました(fast-forward不可の可能性)",
 }
 
+_TARGET_LABELS = {"webui": "Hermes WebUI", "agent": "Hermes Agent"}
+
+# updater.pyのStepResult.nameをそのまま表示せず、利用者向けの進捗文言にマッピングする(Issue #9)
+_STEP_MESSAGES = {
+    "gateway_stop": "Hermesゲートウェイを停止中",
+    "taskkill_webui": "WebUIプロセスを停止中",
+    "webui_api_apply": "WebUI更新APIを呼び出し中",
+    "git_pull_webui": "WebUIリポジトリを更新中",
+    "hermes_update": "Hermes Agentを更新中(数分かかる場合があります)",
+    "hermes_version_check": "更新後のバージョンを確認中",
+    "restart_webui_task": "WebUIを再起動中",
+    "webui_health_check": "WebUIの起動を確認中",
+}
+
+
+def describe_step(step_name: str) -> str:
+    """Issue #9: 進捗表示(トレイのツールチップ・CLI出力)向けの利用者向け文言。"""
+    return _STEP_MESSAGES.get(step_name, step_name)
+
 
 def notify(title: str, message: str) -> None:
     try:
@@ -55,6 +74,12 @@ def notify_check_undetermined(result: CheckResult) -> None:
     """更新有無が判定不能(venv破損等)な場合の通知(実装計画書4節)。"""
     detail = result.error or "原因不明"
     notify("Hermes Updater - 要確認", f"更新の有無を判定できませんでした: {detail[:200]}")
+
+
+def notify_apply_start(targets: list[str]) -> None:
+    """Issue #9: 更新適用開始時のトースト通知(これまで開始通知が一切無かった)。"""
+    labels = [_TARGET_LABELS.get(t, t) for t in targets]
+    notify("Hermes Updater", f"{' / '.join(labels)} の更新を開始します")
 
 
 def notify_apply_result(target: str, success: bool, aborted_reason: Optional[str]) -> None:

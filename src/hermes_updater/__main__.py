@@ -13,6 +13,7 @@ import sys
 
 from hermes_updater.app import UpdaterApp
 from hermes_updater.logger import setup_logging
+from hermes_updater.notifier import describe_step
 
 # hermes CLI/WebUIの出力には✓等のUnicode記号が含まれるため、日本語Windowsのcp932コンソールでも
 # 落ちないようにUTF-8+置換モードへ切り替える(subprocess側の対策はshell.pyを参照)。
@@ -71,6 +72,13 @@ def main(argv: list[str] | None = None) -> int:
         if invalid:
             print(f"invalid targets: {invalid} (must be 'webui' or 'agent')", file=sys.stderr)
             return 2
+
+        # Issue #9: 完了までサイレントだった適用処理に、開始・各ステップの実況を出す
+        app.on_apply_start = lambda ts: print(f"更新の適用を開始します: {', '.join(ts)}")
+        app.on_apply_step = lambda target, step: print(
+            f"  [{target}] {describe_step(step.name)}: {'OK' if step.success else 'FAIL'}"
+        )
+
         results = app.apply_now(targets)
         _print_apply_results(results)
         return 0 if all(r.success for r in results.values()) else 1
