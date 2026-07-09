@@ -17,13 +17,27 @@ from __future__ import annotations
 
 import re
 import shutil
-from typing import Optional
+from typing import Callable, Optional
 
 from hermes_updater import shell
 from hermes_updater.logger import get_logger
 from hermes_updater.models import ApplyResult, CheckResult, StepResult, UpdateConfig
 
 log = get_logger("updater")
+
+OnStep = Optional[Callable[[StepResult], None]]
+
+
+def _add_step(steps: list[StepResult], on_step: OnStep, name: str, success: bool, detail: str) -> StepResult:
+    """StepResultを記録しつつ、Issue #9向けの進捗コールバックを都度発火する。"""
+    step = StepResult(name, success, detail)
+    steps.append(step)
+    if on_step:
+        try:
+            on_step(step)
+        except Exception:
+            log.exception("on_step callback failed")
+    return step
 
 WEBUI_CHECK_TIMEOUT = 5
 WEBUI_APPLY_TIMEOUT = 60
@@ -132,7 +146,7 @@ def _check_webui_fallback(webui_path: str, branch: str) -> tuple[int | None, str
         return None, f"unparseable rev-list output: {rev_result.stdout.strip()[:200]}"
 
 
-def apply_webui_update(config: UpdateConfig) -> ApplyResult:
+def apply_webui_update(config: UpdateConfig, on_step: OnStep = None) -> ApplyResult:
     """5.1節: WebUI自身の更新(API優先、応答不能時のみ手動フォールバック)。"""
     steps: list[StepResult] = []
     response = shell.http_post(
@@ -144,7 +158,7 @@ def apply_webui_update(config: UpdateConfig) -> ApplyResult:
             data = response.json()
         except ValueError:
             data = {}
-        steps.append(StepResult("webui_api_apply", response.ok, f"HTTP {response.status_code}: {data}"))
+        _add_step(steps, on_step, "webui_api_apply", response.ok, f"HTTP {response.status_code}: {data}")
         if data.get("restart_blocked"):
             log.info("WebUI update blocked: active stream/session in progress")
             return ApplyResult(target="webui", success=False, aborted_reason="webui_busy", steps=steps)
@@ -159,10 +173,10 @@ def apply_webui_update(config: UpdateConfig) -> ApplyResult:
         return ApplyResult(target="webui", success=False, aborted_reason="apply_api_failed", steps=steps)
 
     log.warning("WebUI apply API unreachable; falling back to manual git pull + task restart")
-    return _apply_webui_manual_fallback(config, steps)
+    return _apply_webui_manual_fallback(config, steps, on_step)
 
 
-def _kill_webui_process(config: UpdateConfig, steps: list[StepResult]) -> Optional[str]:
+def _kill_webui_process(config: UpdateConfig, steps: list[StepResult], on_step: OnStep = None) -> Optional[str]:
     """WebUIプロセスを停止する(WebUI/Agent両方の適用シーケンスで共通)。
 
     戻り値:
@@ -173,11 +187,11 @@ def _kill_webui_process(config: UpdateConfig, steps: list[StepResult]) -> Option
     """
     pid = shell.find_pid_by_port(config.webui_port)
     if pid is None:
-        steps.append(StepResult("taskkill_webui", True, "port not in use, skipped"))
+        _add_step(steps, on_step, "taskkill_webui", True, "port not in use, skipped")
         return None
     kill_result = shell.taskkill_pid(pid, elevated=True)
     if kill_result.elevation_denied:
-        steps.append(StepResult("taskkill_webui", False, "elevation denied by user"))
+        _add_step(steps, on_step, "taskkill_webui", False, "elevation denied by user")
         return "uac_denied"
     if not kill_result.success:
         # taskkillはUAC昇格(Start-Process -Verb RunAs -Wait)を経由するため実行までに
@@ -187,38 +201,37 @@ def _kill_webui_process(config: UpdateConfig, steps: list[StepResult]) -> Option
         # 結果的に停止済みとみなして成功扱いにする。
         recheck_pid = shell.find_pid_by_port(config.webui_port)
         if recheck_pid is None:
-            steps.append(
-                StepResult(
-                    "taskkill_webui",
-                    True,
-                    f"taskkill failed ({kill_result.stdout or kill_result.stderr}) but port no longer "
-                    "in use; process already stopped",
-                )
+            _add_step(
+                steps, on_step, "taskkill_webui", True,
+                f"taskkill failed ({kill_result.stdout or kill_result.stderr}) but port no longer "
+                "in use; process already stopped",
             )
             return None
-        steps.append(StepResult("taskkill_webui", False, kill_result.stdout or kill_result.stderr))
+        _add_step(steps, on_step, "taskkill_webui", False, kill_result.stdout or kill_result.stderr)
         log.error("Failed to kill WebUI process (PID %s)", pid)
         return "taskkill_failed"
-    steps.append(StepResult("taskkill_webui", True, kill_result.stdout or kill_result.stderr))
+    _add_step(steps, on_step, "taskkill_webui", True, kill_result.stdout or kill_result.stderr)
     return None
 
 
-def _restart_webui_and_check_health(config: UpdateConfig, steps: list[StepResult]) -> tuple[bool, bool]:
+def _restart_webui_and_check_health(
+    config: UpdateConfig, steps: list[StepResult], on_step: OnStep = None
+) -> tuple[bool, bool]:
     """WebUIのタスクスケジューラ再起動＋`/health`確認(WebUI/Agent両方の適用シーケンスで共通)。"""
     start_result = shell.start_scheduled_task(config.webui_task_name)
-    steps.append(StepResult("restart_webui_task", start_result.success, start_result.stdout + start_result.stderr))
+    _add_step(steps, on_step, "restart_webui_task", start_result.success, start_result.stdout + start_result.stderr)
     if not start_result.success:
         log.error("Failed to restart WebUI scheduled task '%s'", config.webui_task_name)
 
     healthy = shell.wait_for_health(f"{config.webui_base_url}/health", retries=HEALTH_RETRIES, delay=HEALTH_DELAY)
-    steps.append(StepResult("webui_health_check", healthy, "200 OK" if healthy else "health check failed"))
+    _add_step(steps, on_step, "webui_health_check", healthy, "200 OK" if healthy else "health check failed")
     if not healthy:
         log.error("WebUI health check failed after restart")
     return start_result.success, healthy
 
 
-def _apply_webui_manual_fallback(config: UpdateConfig, steps: list[StepResult]) -> ApplyResult:
-    kill_outcome = _kill_webui_process(config, steps)
+def _apply_webui_manual_fallback(config: UpdateConfig, steps: list[StepResult], on_step: OnStep = None) -> ApplyResult:
+    kill_outcome = _kill_webui_process(config, steps, on_step)
     if kill_outcome == "uac_denied":
         return ApplyResult(target="webui", success=False, aborted_reason="uac_denied", steps=steps)
 
@@ -230,13 +243,13 @@ def _apply_webui_manual_fallback(config: UpdateConfig, steps: list[StepResult]) 
         )
     else:
         pull_result = shell.run(["git", "-C", config.hermes_webui_path, "pull", "--ff-only"], timeout=30)
-        steps.append(StepResult("git_pull_webui", pull_result.success, pull_result.stdout + pull_result.stderr))
+        _add_step(steps, on_step, "git_pull_webui", pull_result.success, pull_result.stdout + pull_result.stderr)
         pull_failed = not pull_result.success
         if pull_failed:
             log.warning("WebUI git pull --ff-only failed (non-fast-forward or other); recorded as warning")
 
     # 失敗時もWebUIは必ず起動状態に戻す(実装計画5.2節「方針」。WebUI自身の更新にも同じ方針を適用)
-    start_ok, healthy = _restart_webui_and_check_health(config, steps)
+    start_ok, healthy = _restart_webui_and_check_health(config, steps, on_step)
 
     if kill_outcome == "taskkill_failed":
         aborted_reason = "taskkill_failed"
@@ -253,16 +266,16 @@ def _apply_webui_manual_fallback(config: UpdateConfig, steps: list[StepResult]) 
     return ApplyResult(target="webui", success=success, aborted_reason=aborted_reason, steps=steps)
 
 
-def apply_agent_update(config: UpdateConfig) -> ApplyResult:
+def apply_agent_update(config: UpdateConfig, on_step: OnStep = None) -> ApplyResult:
     """5.2節: `hermes update` CLI経由の固定手順(Phase16準拠)。"""
     steps: list[StepResult] = []
 
     gw_stop = shell.run(["hermes", "gateway", "stop"], timeout=30)
-    steps.append(StepResult("gateway_stop", gw_stop.success, gw_stop.stdout + gw_stop.stderr))
+    _add_step(steps, on_step, "gateway_stop", gw_stop.success, gw_stop.stdout + gw_stop.stderr)
     if not gw_stop.success:
         log.warning("hermes gateway stop returned non-zero (best-effort, continuing): %s", gw_stop.stderr)
 
-    kill_outcome = _kill_webui_process(config, steps)
+    kill_outcome = _kill_webui_process(config, steps, on_step)
     if kill_outcome == "uac_denied":
         return ApplyResult(target="agent", success=False, aborted_reason="uac_denied", steps=steps)
 
@@ -276,16 +289,18 @@ def apply_agent_update(config: UpdateConfig) -> ApplyResult:
     else:
         update_result = shell.run(["hermes", "update", "--yes"], timeout=AGENT_UPDATE_TIMEOUT)
         update_ok = update_result.success
-        steps.append(StepResult("hermes_update", update_ok, (update_result.stdout + update_result.stderr)[-2000:]))
+        _add_step(
+            steps, on_step, "hermes_update", update_ok, (update_result.stdout + update_result.stderr)[-2000:]
+        )
         if update_ok:
             version_result = shell.run(["hermes", "version"], timeout=30)
             version_ok = bool(_AGENT_VERSION_UP_TO_DATE_RE.search(version_result.stdout or ""))
-            steps.append(StepResult("hermes_version_check", version_ok, version_result.stdout))
+            _add_step(steps, on_step, "hermes_version_check", version_ok, version_result.stdout)
         else:
             log.error("hermes update --yes failed; WebUI will still be restarted before aborting")
 
     # 失敗時もWebUIは必ず起動状態に戻す(実装計画5.2節「方針」)
-    start_ok, healthy = _restart_webui_and_check_health(config, steps)
+    start_ok, healthy = _restart_webui_and_check_health(config, steps, on_step)
 
     if kill_outcome == "taskkill_failed":
         aborted_reason = "taskkill_failed"

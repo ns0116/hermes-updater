@@ -20,6 +20,7 @@ log = get_logger("ui")
 _COLOR_IDLE = "#4A90D9"
 _COLOR_PENDING = "#E0A030"
 _COLOR_ATTENTION = "#D9534F"
+_COLOR_APPLYING = "#8E44AD"
 
 
 def _build_fallback_icon(color: str) -> Image.Image:
@@ -63,7 +64,7 @@ def _draw_status_badge(img: Image.Image, color: str) -> None:
     )
 
 
-def _load_and_build_status_icons(app: UpdaterApp) -> tuple[Image.Image, Image.Image, Image.Image]:
+def _load_and_build_status_icons(app: UpdaterApp) -> tuple[Image.Image, Image.Image, Image.Image, Image.Image]:
     """ローカルの公式 hermes-agent ロゴのロードを試み、ステータスに応じたアイコン群をビルドする。"""
     install_path = Path(app.config.hermes_install_path)
     agent_img_dir = install_path / "hermes-agent" / "website" / "static" / "img"
@@ -91,23 +92,28 @@ def _load_and_build_status_icons(app: UpdaterApp) -> tuple[Image.Image, Image.Im
             _build_fallback_icon(_COLOR_IDLE),
             _build_fallback_icon(_COLOR_PENDING),
             _build_fallback_icon(_COLOR_ATTENTION),
+            _build_fallback_icon(_COLOR_APPLYING),
         )
-        
+
     # トレイアイコンの標準サイズにリサイズ
     size = 64
     base_img = base_img.resize((size, size), Image.Resampling.LANCZOS)
-    
-    # 3状態のアイコンを生成
+
+    # 4状態のアイコンを生成
     icon_idle = base_img.copy()
     _draw_status_badge(icon_idle, "#2ECC71")  # 緑バッジ
-    
+
     icon_pending = base_img.copy()
     _draw_status_badge(icon_pending, "#F39C12")  # オレンジバッジ
-    
+
     icon_attention = base_img.copy()
     _draw_status_badge(icon_attention, "#E74C3C")  # 赤バッジ
-    
-    return icon_idle, icon_pending, icon_attention
+
+    # Issue #9: 更新適用中を示す専用状態(紫バッジ)
+    icon_applying = base_img.copy()
+    _draw_status_badge(icon_applying, _COLOR_APPLYING)
+
+    return icon_idle, icon_pending, icon_attention, icon_applying
 
 
 def run_tray_app(app: UpdaterApp) -> None:
@@ -115,7 +121,14 @@ def run_tray_app(app: UpdaterApp) -> None:
     icon: pystray.Icon
 
     # アイコン群をビルド
-    icon_idle, icon_pending, icon_attention = _load_and_build_status_icons(app)
+    icon_idle, icon_pending, icon_attention, icon_applying = _load_and_build_status_icons(app)
+
+    def _select_icon_for_state() -> Image.Image:
+        if app.state.last_check_result.undetermined:
+            return icon_attention
+        elif app.state.pending_update:
+            return icon_pending
+        return icon_idle
 
     def on_update_available(result: CheckResult) -> None:
         notifier.notify_update_available(result)
@@ -125,16 +138,23 @@ def run_tray_app(app: UpdaterApp) -> None:
 
     def on_check_complete(result: CheckResult) -> None:
         # 通知の要否とは無関係に、チェックのたびに必ずアイコンを最新状態へ反映する
-        if result.undetermined:
-            icon.icon = icon_attention
-        elif result.has_update:
-            icon.icon = icon_pending
-        else:
-            icon.icon = icon_idle
+        icon.icon = _select_icon_for_state()
+
+    def on_apply_start(targets: list[str]) -> None:
+        # Issue #9: 適用開始が全く見えない問題への対応(専用アイコン状態 + 開始トースト)
+        icon.icon = icon_applying
+        icon.title = "Hermes Updater - 更新を適用中..."
+        notifier.notify_apply_start(targets)
+
+    def on_apply_step(target: str, step) -> None:
+        # Issue #9: 主要ステップ(WebUI停止/Agent更新/WebUI再起動)ごとの簡易進捗表示
+        icon.title = f"Hermes Updater - {target}: {notifier.describe_step(step.name)}"
 
     app.on_update_available = on_update_available
     app.on_check_undetermined = on_check_undetermined
     app.on_check_complete = on_check_complete
+    app.on_apply_start = on_apply_start
+    app.on_apply_step = on_apply_step
 
     def check_now_action(icon, item):
         threading.Thread(target=app.check_now, daemon=True).start()
@@ -142,11 +162,28 @@ def run_tray_app(app: UpdaterApp) -> None:
     def make_apply_action(targets: list[str]):
         def _action(icon, item):
             def _run():
-                results = app.apply_now(targets)
-                for name, result in results.items():
-                    notifier.notify_apply_result(name, result.success, result.aborted_reason)
-                if results and all(r.success for r in results.values()):
-                    icon.icon = icon_idle
+                try:
+                    results = app.apply_now(targets)
+                except Exception:
+                    # apply_now自体が予期せず例外を投げた場合、適用中アイコンで固まらないよう復旧する
+                    log.exception("apply_now (triggered from tray menu) crashed")
+                    icon.title = "Hermes Updater"
+                    icon.icon = _select_icon_for_state()
+                    return
+                if not results:
+                    # 別の適用が進行中で今回は多重実行防止により何もしていない
+                    # (アイコン/タイトルは進行中の呼び出し側が管理しているので触らない)
+                    return
+                try:
+                    for name, result in results.items():
+                        notifier.notify_apply_result(name, result.success, result.aborted_reason)
+                    # 適用後の実際の状態を反映させるため再チェックする(on_check_completeがアイコンを更新する)
+                    app.check_now()
+                except Exception:
+                    log.exception("post-apply notify/check failed")
+                finally:
+                    icon.title = "Hermes Updater"
+                    icon.icon = _select_icon_for_state()
             threading.Thread(target=_run, daemon=True).start()
         return _action
 
@@ -193,14 +230,9 @@ def run_tray_app(app: UpdaterApp) -> None:
     def reload_config_action(icon, item):
         app.reload_config()
         # 設定再読み込みに伴い、アイコンを再生成して適用する
-        nonlocal icon_idle, icon_pending, icon_attention
-        icon_idle, icon_pending, icon_attention = _load_and_build_status_icons(app)
-        if app.state.last_check_result.undetermined:
-            icon.icon = icon_attention
-        elif app.state.pending_update:
-            icon.icon = icon_pending
-        else:
-            icon.icon = icon_idle
+        nonlocal icon_idle, icon_pending, icon_attention, icon_applying
+        icon_idle, icon_pending, icon_attention, icon_applying = _load_and_build_status_icons(app)
+        icon.icon = _select_icon_for_state()
         notifier.notify("Hermes Updater", "設定を再読み込みしました")
 
     def quit_action(icon, item):

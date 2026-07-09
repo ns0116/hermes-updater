@@ -79,11 +79,11 @@ def test_apply_now_aggregates_success_and_error(tmp_path, monkeypatch):
     app = UpdaterApp(base_dir=tmp_path)
     monkeypatch.setattr(
         updater, "apply_webui_update",
-        lambda config: ApplyResult(target="webui", success=True, steps=[]),
+        lambda config, on_step=None: ApplyResult(target="webui", success=True, steps=[]),
     )
     monkeypatch.setattr(
         updater, "apply_agent_update",
-        lambda config: ApplyResult(target="agent", success=False, aborted_reason="uac_denied", steps=[]),
+        lambda config, on_step=None: ApplyResult(target="agent", success=False, aborted_reason="uac_denied", steps=[]),
     )
 
     results = app.apply_now(["webui", "agent"])
@@ -156,6 +156,47 @@ def test_safe_check_now_swallows_exceptions(tmp_path, monkeypatch):
     monkeypatch.setattr(app, "check_now", lambda: (_ for _ in ()).throw(ValueError("boom")))
 
     app._safe_check_now()  # 例外が伝播しないことを確認(スケジューラスレッドを落とさない)
+
+
+def test_apply_now_fires_on_apply_start_and_on_apply_step(tmp_path, monkeypatch):
+    app = UpdaterApp(base_dir=tmp_path)
+
+    def fake_apply_webui_update(config, on_step=None):
+        if on_step:
+            from hermes_updater.models import StepResult
+            on_step(StepResult("git_pull_webui", True, "ok"))
+        return ApplyResult(target="webui", success=True, steps=[])
+
+    monkeypatch.setattr(updater, "apply_webui_update", fake_apply_webui_update)
+
+    started = []
+    steps = []
+    app.on_apply_start = lambda targets: started.append(targets)
+    app.on_apply_step = lambda target, step: steps.append((target, step.name))
+
+    app.apply_now(["webui"])
+
+    assert started == [["webui"]]
+    assert steps == [("webui", "git_pull_webui")]
+
+
+def test_apply_now_does_not_fire_on_apply_start_when_already_running(tmp_path, monkeypatch):
+    app = UpdaterApp(base_dir=tmp_path)
+    monkeypatch.setattr(
+        updater, "apply_webui_update",
+        lambda config, on_step=None: ApplyResult(target="webui", success=True, steps=[]),
+    )
+    started = []
+    app.on_apply_start = lambda targets: started.append(targets)
+
+    app._apply_lock.acquire()  # 実行中を模擬
+    try:
+        results = app.apply_now(["webui"])
+    finally:
+        app._apply_lock.release()
+
+    assert results == {}
+    assert started == []
 
 
 def test_safe_interval_seconds_clamps_invalid_value(tmp_path):

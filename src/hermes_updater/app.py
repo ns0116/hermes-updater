@@ -14,7 +14,7 @@ from typing import Callable, Iterable, Optional
 from hermes_updater import config as config_module
 from hermes_updater import updater
 from hermes_updater.logger import get_logger
-from hermes_updater.models import ApplyResult, CheckResult
+from hermes_updater.models import ApplyResult, CheckResult, StepResult
 
 log = get_logger("app")
 
@@ -43,6 +43,9 @@ class UpdaterApp:
         self.on_check_undetermined: Optional[Callable[[CheckResult], None]] = None
         # 通知の要否に関わらず、チェック完了のたびに必ず呼ばれる(アイコン表示の更新用)。
         self.on_check_complete: Optional[Callable[[CheckResult], None]] = None
+        # Issue #9: 更新適用の開始・各ステップ完了を通知するコールバック(UI/CLI層で進捗表示に使う)。
+        self.on_apply_start: Optional[Callable[[list[str]], None]] = None
+        self.on_apply_step: Optional[Callable[[str, StepResult], None]] = None
 
     def reload_config(self) -> None:
         with self._lock:
@@ -130,15 +133,21 @@ class UpdaterApp:
 
     def _apply_now_impl(self, targets: Iterable[str]) -> dict[str, ApplyResult]:
         targets = list(targets)
+        if self.on_apply_start:
+            try:
+                self.on_apply_start(targets)
+            except Exception:
+                log.exception("on_apply_start callback failed")
+
         results: dict[str, ApplyResult] = {}
         # 5.1→5.2の順を推奨(実装計画書「方針」): 先にWebUI自身、その後Agent
         if "webui" in targets:
             log.info("applying webui update")
-            results["webui"] = updater.apply_webui_update(self.config)
+            results["webui"] = updater.apply_webui_update(self.config, on_step=self._apply_step_callback("webui"))
             _log_apply_result("webui", results["webui"])
         if "agent" in targets:
             log.info("applying agent update")
-            results["agent"] = updater.apply_agent_update(self.config)
+            results["agent"] = updater.apply_agent_update(self.config, on_step=self._apply_step_callback("agent"))
             _log_apply_result("agent", results["agent"])
 
         with self._lock:
@@ -150,6 +159,15 @@ class UpdaterApp:
             config_module.save_state(self.state, self.base_dir)
 
         return results
+
+    def _apply_step_callback(self, target: str) -> Callable[[StepResult], None]:
+        def _on_step(step: StepResult) -> None:
+            if self.on_apply_step:
+                try:
+                    self.on_apply_step(target, step)
+                except Exception:
+                    log.exception("on_apply_step callback failed")
+        return _on_step
 
     def run_forever(self) -> None:
         """バックグラウンドスケジューラ本体。`stop()`が呼ばれるまでブロックする。
