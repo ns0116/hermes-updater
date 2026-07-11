@@ -172,7 +172,7 @@ def run_tray_app(app: UpdaterApp) -> None:
                     return
                 if not results:
                     # 別の適用が進行中で今回は多重実行防止により何もしていない
-                    # (アイコン/タイトルは進行中の呼び出し側が管理しているので触らない)
+                    notifier.notify("Hermes Updater", "既に更新を適用中です。しばらく待ってからお試しください。")
                     return
                 try:
                     for name, result in results.items():

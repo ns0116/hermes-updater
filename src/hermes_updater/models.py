@@ -56,17 +56,41 @@ class UpdateConfig:
 
     @staticmethod
     def from_dict(data: dict) -> "UpdateConfig":
+        import logging
+        log = logging.getLogger("hermes_updater.models")
         defaults = UpdateConfig()
+
+        raw_interval = data.get("check_interval_hours", defaults.check_interval_hours)
+        if isinstance(raw_interval, (int, float)) and raw_interval > 0:
+            check_interval_hours = float(raw_interval)
+        else:
+            log.warning("check_interval_hours=%r は無効な値です。デフォルト値 %g を使用します", raw_interval, defaults.check_interval_hours)
+            check_interval_hours = defaults.check_interval_hours
+
+        raw_port = data.get("webui_port", defaults.webui_port)
+        if isinstance(raw_port, int) and 1 <= raw_port <= 65535:
+            webui_port = raw_port
+        else:
+            log.warning("webui_port=%r は無効な値です（1〜65535の整数が必要）。デフォルト値 %d を使用します", raw_port, defaults.webui_port)
+            webui_port = defaults.webui_port
+
+        raw_branch = data.get("webui_branch", defaults.webui_branch)
+        if isinstance(raw_branch, str) and raw_branch.strip():
+            webui_branch = raw_branch
+        else:
+            log.warning("webui_branch=%r は無効な値です（空でない文字列が必要）。デフォルト値 %r を使用します", raw_branch, defaults.webui_branch)
+            webui_branch = defaults.webui_branch
+
         return UpdateConfig(
-            check_interval_hours=data.get("check_interval_hours", defaults.check_interval_hours),
+            check_interval_hours=check_interval_hours,
             check_on_startup=data.get("check_on_startup", defaults.check_on_startup),
             enable_notifications=data.get("enable_notifications", defaults.enable_notifications),
             hermes_install_path=data.get("hermes_install_path", defaults.hermes_install_path),
             hermes_webui_path=data.get("hermes_webui_path", defaults.hermes_webui_path),
             webui_host=data.get("webui_host", defaults.webui_host),
-            webui_port=data.get("webui_port", defaults.webui_port),
+            webui_port=webui_port,
             webui_task_name=data.get("webui_task_name", defaults.webui_task_name),
-            webui_branch=data.get("webui_branch", defaults.webui_branch),
+            webui_branch=webui_branch,
             auto_apply_updates=data.get("auto_apply_updates", defaults.auto_apply_updates),
         )
 

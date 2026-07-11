@@ -53,8 +53,8 @@ _AGENT_VERSION_UP_TO_DATE_RE = re.compile(r"Up to date")
 
 def check_updates(config: UpdateConfig) -> CheckResult:
     """FR-1/FR-2: WebUI APIを優先し、応答不能ならCLI/gitフォールバックする。"""
-    api_data = shell.http_post_json(
-        f"{config.webui_base_url}/api/updates/check", {"force": False}, timeout=WEBUI_CHECK_TIMEOUT
+    api_data = shell.http_get_json(
+        f"{config.webui_base_url}/api/updates/check", timeout=WEBUI_CHECK_TIMEOUT
     )
 
     agent_behind: int | None = None
@@ -280,6 +280,7 @@ def apply_agent_update(config: UpdateConfig, on_step: OnStep = None) -> ApplyRes
         return ApplyResult(target="agent", success=False, aborted_reason="uac_denied", steps=steps)
 
     update_ok = False
+    update_timed_out = False
     version_ok = False
     if kill_outcome == "taskkill_failed":
         log.error(
@@ -288,10 +289,12 @@ def apply_agent_update(config: UpdateConfig, on_step: OnStep = None) -> ApplyRes
         )
     else:
         update_result = shell.run(["hermes", "update", "--yes"], timeout=AGENT_UPDATE_TIMEOUT)
+        update_timed_out = update_result.timed_out
         update_ok = update_result.success
-        _add_step(
-            steps, on_step, "hermes_update", update_ok, (update_result.stdout + update_result.stderr)[-2000:]
-        )
+        detail = (update_result.stdout + update_result.stderr)[-2000:]
+        if update_timed_out:
+            detail = f"タイムアウト({AGENT_UPDATE_TIMEOUT}s超過): venvの状態を手動確認してください。{detail}"
+        _add_step(steps, on_step, "hermes_update", update_ok, detail)
         if update_ok:
             version_result = shell.run(["hermes", "version"], timeout=30)
             version_ok = bool(_AGENT_VERSION_UP_TO_DATE_RE.search(version_result.stdout or ""))
@@ -304,6 +307,8 @@ def apply_agent_update(config: UpdateConfig, on_step: OnStep = None) -> ApplyRes
 
     if kill_outcome == "taskkill_failed":
         aborted_reason = "taskkill_failed"
+    elif update_timed_out:
+        aborted_reason = "hermes_update_timeout"
     elif not update_ok:
         aborted_reason = "hermes_update_failed"
     elif not version_ok:
