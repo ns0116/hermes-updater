@@ -1,6 +1,6 @@
 [project]
 name = "hermes-updater"
-version = "1.0.2"
+version = "1.0.3"
 description = "Hermes Agent / Hermes WebUI の更新チェック・通知・適用を行うWindowsシステムトレイ常駐アプリ"
 readme = "README.md"
 license = "MIT"
