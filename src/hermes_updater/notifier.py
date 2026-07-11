@@ -83,8 +83,9 @@ def notify_apply_start(targets: list[str]) -> None:
 
 
 def notify_apply_result(target: str, success: bool, aborted_reason: Optional[str]) -> None:
+    label = _TARGET_LABELS.get(target, target)
     if success:
-        notify("Hermes Updater", f"{target} の更新が完了しました")
+        notify("Hermes Updater", f"{label} の更新が完了しました")
     else:
         reason = _ABORTED_REASON_MESSAGES.get(aborted_reason, aborted_reason or "不明なエラー")
-        notify("Hermes Updater", f"{target} の更新に失敗しました: {reason}")
+        notify("Hermes Updater", f"{label} の更新に失敗しました: {reason}")

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import datetime
 
 from hermes_updater.app import UpdaterApp
 from hermes_updater.logger import setup_logging
@@ -85,8 +86,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.status:
         state = app.state
+        if state.last_check_ts == 0.0:
+            print("状態: まだ一度もチェックが実行されていません。")
+            print("  hermes-updater --check を実行してください。")
+            return 0
+        ts_str = datetime.fromtimestamp(state.last_check_ts).strftime("%Y-%m-%d %H:%M:%S")
         print(f"pending_update={state.pending_update}")
-        print(f"last_check_ts={state.last_check_ts}")
+        print(f"last_check={ts_str}")
         _print_check_result(state.last_check_result)
         print(f"last_update_success={state.last_update_success}")
         print(f"last_error={state.last_error}")
