@@ -35,13 +35,13 @@ def _build_fallback_icon(color: str) -> Image.Image:
 def _draw_status_badge(img: Image.Image, color: str) -> None:
     size = img.width
     draw = ImageDraw.Draw(img)
-    
+
     # バッジのサイズとマージン
     margin = 3
     r = 10
     cx = size - r - margin
     cy = size - r - margin
-    
+
     # 白い縁取りを描画してロゴ詳細からバッジを分離する
     border_color = "#FFFFFF"
     border_width = 3
@@ -49,14 +49,14 @@ def _draw_status_badge(img: Image.Image, color: str) -> None:
         (cx - r - border_width, cy - r - border_width, cx + r + border_width, cy + r + border_width),
         fill=border_color
     )
-    
+
     # ロゴのテイストに合わせて黒いアウトラインを描画
     outline_color = "#000000"
     draw.ellipse(
         (cx - r - 1, cy - r - 1, cx + r + 1, cy + r + 1),
         fill=outline_color
     )
-    
+
     # バッジ本体を描画
     draw.ellipse(
         (cx - r, cy - r, cx + r, cy + r),
@@ -68,14 +68,14 @@ def _load_and_build_status_icons(app: UpdaterApp) -> tuple[Image.Image, Image.Im
     """ローカルの公式 hermes-agent ロゴのロードを試み、ステータスに応じたアイコン群をビルドする。"""
     install_path = Path(app.config.hermes_install_path)
     agent_img_dir = install_path / "hermes-agent" / "website" / "static" / "img"
-    
+
     paths_to_try = [
         agent_img_dir / "logo.png",
         agent_img_dir / "apple-touch-icon.png",
         agent_img_dir / "favicon-32x32.png",
         agent_img_dir / "favicon.ico",
     ]
-    
+
     base_img = None
     for path in paths_to_try:
         try:
@@ -85,7 +85,7 @@ def _load_and_build_status_icons(app: UpdaterApp) -> tuple[Image.Image, Image.Im
                 break
         except Exception as e:
             log.warning("Failed to load icon from %s: %s", path, e)
-            
+
     if base_img is None:
         log.warning("No official hermes-agent icon found. Falling back to dynamically generated icons.")
         return (
