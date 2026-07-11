@@ -55,7 +55,15 @@ class UpdaterApp:
         """FR-5「今すぐチェック」・スケジューラの両方から呼ばれる、必ず実チェックを行うパス。
 
         既にチェックが進行中の場合は多重実行せず、直近の結果をそのまま返す。
+        適用処理が進行中の場合もスキップする(同一リソースへの並行アクセスを防ぐ #12)。
         """
+        apply_running = not self._apply_lock.acquire(blocking=False)
+        if not apply_running:
+            self._apply_lock.release()
+        if apply_running:
+            log.info("apply in progress, skipping check")
+            return self.state.last_check_result
+
         if not self._check_lock.acquire(blocking=False):
             log.info("check already in progress, skipping duplicate request")
             return self.state.last_check_result
@@ -153,7 +161,10 @@ class UpdaterApp:
         with self._lock:
             self.state.last_update_ts = time.time()
             if results:
-                self.state.last_update_success = all(r.success for r in results.values())
+                all_succeeded = all(r.success for r in results.values())
+                self.state.last_update_success = all_succeeded
+                if all_succeeded:
+                    self.state.pending_update = False
             errors = [f"{t}:{r.aborted_reason}" for t, r in results.items() if r.aborted_reason]
             self.state.last_error = "; ".join(errors) if errors else None
             config_module.save_state(self.state, self.base_dir)

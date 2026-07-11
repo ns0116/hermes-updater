@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+
 from hermes_updater import shell, updater
 from hermes_updater.models import UpdateConfig
 from hermes_updater.shell import ShellResult
@@ -91,8 +93,8 @@ def test_webui_fallback_fetch_failure(monkeypatch):
 
 def test_check_updates_uses_webui_api_when_available(monkeypatch):
     monkeypatch.setattr(
-        shell, "http_post_json",
-        lambda url, body, timeout=None: {
+        shell, "http_get_json",
+        lambda url, timeout=None: {
             "webui": {"name": "webui", "behind": 2},
             "agent": {"name": "agent", "behind": 0},
             "checked_at": 123.0,
@@ -108,7 +110,7 @@ def test_check_updates_uses_webui_api_when_available(monkeypatch):
 
 
 def test_check_updates_falls_back_when_api_unreachable(monkeypatch):
-    monkeypatch.setattr(shell, "http_post_json", lambda url, body, timeout=None: None)
+    monkeypatch.setattr(shell, "http_get_json", lambda url, timeout=None: None)
     monkeypatch.setattr(updater, "_check_agent_fallback", lambda: (1, None))
     monkeypatch.setattr(updater, "_check_webui_fallback", lambda path, branch: (0, None))
     result = updater.check_updates(_cfg())
@@ -120,8 +122,8 @@ def test_check_updates_falls_back_when_api_unreachable(monkeypatch):
 def test_check_updates_partial_fallback_when_one_field_unknown(monkeypatch):
     # WebUI APIはagent側の情報を持っているがwebui側はno_git等で不明 -> webuiのみフォールバック
     monkeypatch.setattr(
-        shell, "http_post_json",
-        lambda url, body, timeout=None: {
+        shell, "http_get_json",
+        lambda url, timeout=None: {
             "webui": {"name": "webui", "behind": None, "error": "fetch failed"},
             "agent": {"name": "agent", "behind": 4},
             "checked_at": 123.0,
@@ -138,7 +140,7 @@ def test_check_updates_partial_fallback_when_one_field_unknown(monkeypatch):
 
 
 def test_check_updates_disabled_setting_falls_back(monkeypatch):
-    monkeypatch.setattr(shell, "http_post_json", lambda url, body, timeout=None: {"disabled": True})
+    monkeypatch.setattr(shell, "http_get_json", lambda url, timeout=None: {"disabled": True})
     monkeypatch.setattr(updater, "_check_agent_fallback", lambda: (0, None))
     monkeypatch.setattr(updater, "_check_webui_fallback", lambda path, branch: (0, None))
     result = updater.check_updates(_cfg())
@@ -146,7 +148,7 @@ def test_check_updates_disabled_setting_falls_back(monkeypatch):
 
 
 def test_check_updates_undetermined_when_fallback_cannot_parse(monkeypatch):
-    monkeypatch.setattr(shell, "http_post_json", lambda url, body, timeout=None: None)
+    monkeypatch.setattr(shell, "http_get_json", lambda url, timeout=None: None)
     monkeypatch.setattr(updater, "_check_agent_fallback", lambda: (None, "unrecognized output"))
     monkeypatch.setattr(updater, "_check_webui_fallback", lambda path, branch: (0, None))
     result = updater.check_updates(_cfg())
@@ -157,8 +159,8 @@ def test_check_updates_undetermined_when_fallback_cannot_parse(monkeypatch):
 
 def test_check_updates_not_undetermined_when_both_resolved(monkeypatch):
     monkeypatch.setattr(
-        shell, "http_post_json",
-        lambda url, body, timeout=None: {"webui": {"behind": 0}, "agent": {"behind": 0}},
+        shell, "http_get_json",
+        lambda url, timeout=None: {"webui": {"behind": 0}, "agent": {"behind": 0}},
     )
     result = updater.check_updates(_cfg())
     assert result.undetermined is False
@@ -332,3 +334,127 @@ def test_webui_manual_fallback_pull_failure_sets_aborted_reason(monkeypatch):
     step_names = [s.name for s in result.steps]
     assert "restart_webui_task" in step_names
     assert "webui_health_check" in step_names
+
+
+# ---- apply_webui_update: APIファーストパス各分岐 (#25) ----
+
+def _make_http_response(status_code: int, json_data: dict):
+    resp = MagicMock()
+    resp.ok = status_code < 400
+    resp.status_code = status_code
+    resp.json.return_value = json_data
+    return resp
+
+
+def test_apply_webui_api_restart_blocked_aborts_without_kill(monkeypatch):
+    monkeypatch.setattr(
+        shell, "http_post",
+        lambda url, body, timeout=None: _make_http_response(200, {"ok": False, "restart_blocked": True}),
+    )
+    calls = []
+    monkeypatch.setattr(shell, "find_pid_by_port", lambda port: calls.append("pid") or 9999)
+
+    result = updater.apply_webui_update(_cfg())
+
+    assert result.success is False
+    assert result.aborted_reason == "webui_busy"
+    assert "pid" not in calls, "restart_blocked時はtaskkillに進んではいけない"
+
+
+def test_apply_webui_api_ok_true_with_conflict_warning_succeeds(monkeypatch):
+    monkeypatch.setattr(
+        shell, "http_post",
+        lambda url, body, timeout=None: _make_http_response(200, {"ok": True, "conflict": True, "message": "stashed"}),
+    )
+    result = updater.apply_webui_update(_cfg())
+    assert result.success is True
+    assert result.aborted_reason is None
+
+
+def test_apply_webui_api_ok_false_with_conflict_sets_aborted_reason(monkeypatch):
+    monkeypatch.setattr(
+        shell, "http_post",
+        lambda url, body, timeout=None: _make_http_response(200, {"ok": False, "conflict": True, "message": "conflict"}),
+    )
+    result = updater.apply_webui_update(_cfg())
+    assert result.success is False
+    assert result.aborted_reason == "conflict"
+
+
+def test_apply_webui_api_ok_false_no_conflict_sets_apply_api_failed(monkeypatch):
+    monkeypatch.setattr(
+        shell, "http_post",
+        lambda url, body, timeout=None: _make_http_response(200, {"ok": False, "message": "internal error"}),
+    )
+    result = updater.apply_webui_update(_cfg())
+    assert result.success is False
+    assert result.aborted_reason == "apply_api_failed"
+
+
+def test_apply_webui_api_non_json_response_falls_back_to_manual(monkeypatch):
+    resp = MagicMock()
+    resp.ok = True
+    resp.status_code = 200
+    resp.json.side_effect = ValueError("not JSON")
+    monkeypatch.setattr(shell, "http_post", lambda url, body, timeout=None: resp)
+    monkeypatch.setattr(shell, "find_pid_by_port", lambda port: None)
+    monkeypatch.setattr(shell, "run", lambda args, timeout=None: ShellResult(0))
+    monkeypatch.setattr(shell, "start_scheduled_task", lambda name, timeout=30: ShellResult(0))
+    monkeypatch.setattr(shell, "wait_for_health", lambda url, retries=10, delay=2.0: True)
+
+    result = updater.apply_webui_update(_cfg())
+    # JSONデコード失敗 -> data={} -> ok=False -> apply_api_failed
+    assert result.aborted_reason == "apply_api_failed"
+
+
+def test_apply_webui_manual_fallback_taskkill_failed_still_restarts(monkeypatch):
+    monkeypatch.setattr(shell, "http_post", lambda url, body, timeout=None: None)
+    monkeypatch.setattr(shell, "find_pid_by_port", lambda port: 5678)
+    monkeypatch.setattr(shell, "taskkill_pid", lambda pid, elevated=True: ShellResult(1, stderr="access denied"))
+    monkeypatch.setattr(shell, "find_pid_by_port", lambda port: 5678)
+
+    calls = []
+    monkeypatch.setattr(shell, "start_scheduled_task", lambda name, timeout=30: calls.append("restart") or ShellResult(0))
+    monkeypatch.setattr(shell, "wait_for_health", lambda url, retries=10, delay=2.0: True)
+
+    result = updater.apply_webui_update(_cfg())
+
+    assert "restart" in calls, "taskkill失敗時もWebUI再起動を試みるべき"
+    assert result.success is False
+    assert result.aborted_reason == "taskkill_failed"
+
+
+def test_apply_webui_health_check_failed_sets_aborted_reason(monkeypatch):
+    monkeypatch.setattr(shell, "http_post", lambda url, body, timeout=None: None)
+    monkeypatch.setattr(shell, "find_pid_by_port", lambda port: None)
+    monkeypatch.setattr(shell, "run", lambda args, timeout=None: ShellResult(0))
+    monkeypatch.setattr(shell, "start_scheduled_task", lambda name, timeout=30: ShellResult(0))
+    monkeypatch.setattr(shell, "wait_for_health", lambda url, retries=10, delay=2.0: False)
+
+    result = updater.apply_webui_update(_cfg())
+
+    assert result.success is False
+    assert result.aborted_reason == "webui_health_check_failed"
+
+
+# ---- apply_agent_update: タイムアウト専用aborted_reason (#10) ----
+
+def test_apply_agent_update_timeout_sets_dedicated_reason(monkeypatch):
+    def fake_run(args, timeout=None):
+        if "update" in args:
+            return ShellResult(-1, timed_out=True)
+        return ShellResult(0)
+
+    monkeypatch.setattr(shell, "run", fake_run)
+    monkeypatch.setattr(shell, "find_pid_by_port", lambda port: None)
+    monkeypatch.setattr(shell, "start_scheduled_task", lambda name, timeout=30: ShellResult(0))
+    monkeypatch.setattr(shell, "wait_for_health", lambda url, retries=10, delay=2.0: True)
+
+    result = updater.apply_agent_update(_cfg())
+
+    assert result.success is False
+    assert result.aborted_reason == "hermes_update_timeout"
+    step_names = [s.name for s in result.steps]
+    assert "restart_webui_task" in step_names, "タイムアウト時もWebUI再起動を試みるべき"
+    hermes_step = next(s for s in result.steps if s.name == "hermes_update")
+    assert "タイムアウト" in hermes_step.detail

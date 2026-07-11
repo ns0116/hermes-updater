@@ -18,7 +18,16 @@ hermes-updater = "hermes_updater.__main__:main"
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
+    "pytest-cov",
+    "ruff",
 ]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]
 
 [build-system]
 requires = ["setuptools>=68.0"]

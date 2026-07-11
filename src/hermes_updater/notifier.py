@@ -21,6 +21,7 @@ _ABORTED_REASON_MESSAGES = {
     "conflict": "WebUIリポジトリの競合により一部のみ更新されました",
     "apply_api_failed": "WebUIの更新APIが失敗しました",
     "hermes_update_failed": "hermes updateの実行に失敗しました",
+    "hermes_update_timeout": "hermes updateがタイムアウトしました。venvの状態を手動で確認してください",
     "version_check_failed": "更新後のバージョン確認に失敗しました",
     "webui_task_restart_failed": "WebUIタスクの再起動に失敗しました",
     "webui_health_check_failed": "WebUIの起動確認(health check)に失敗しました",
