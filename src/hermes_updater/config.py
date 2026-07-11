@@ -59,13 +59,21 @@ def _atomic_write_json(path: Path, data: dict) -> None:
 
 def load_config(base_dir: Path | None = None) -> UpdateConfig:
     """`config.json`を読み込む。存在しなければデフォルトを生成して書き込む。"""
+    import logging
+
     path = get_config_path(base_dir)
     if not path.exists():
         config = UpdateConfig()
         save_config(config, base_dir)
         return config
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        logging.getLogger("hermes_updater.config").error(
+            "config.json の解析に失敗しました。デフォルト設定で起動します: %s", e
+        )
+        return UpdateConfig()
     return UpdateConfig.from_dict(data)
 
 
@@ -75,11 +83,19 @@ def save_config(config: UpdateConfig, base_dir: Path | None = None) -> None:
 
 def load_state(base_dir: Path | None = None) -> AppState:
     """`state.json`を読み込む。存在しなければ初期状態を返す(書き込みはしない)。"""
+    import logging
+
     path = get_state_path(base_dir)
     if not path.exists():
         return AppState()
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        logging.getLogger("hermes_updater.config").error(
+            "state.json の解析に失敗しました。初期状態で起動します: %s", e
+        )
+        return AppState()
     return AppState.from_dict(data)
 
 

@@ -81,10 +81,10 @@ def _load_and_build_status_icons(app: UpdaterApp) -> tuple[Image.Image, Image.Im
         try:
             if path.exists():
                 base_img = Image.open(path).convert("RGBA")
-                log.info(f"Loaded official hermes-agent icon from: {path}")
+                log.info("Loaded official hermes-agent icon from: %s", path)
                 break
         except Exception as e:
-            log.warning(f"Failed to load icon from {path}: {e}")
+            log.warning("Failed to load icon from %s: %s", path, e)
             
     if base_img is None:
         log.warning("No official hermes-agent icon found. Falling back to dynamically generated icons.")
@@ -193,10 +193,16 @@ def run_tray_app(app: UpdaterApp) -> None:
         notifier.notify("Hermes Updater - 状態", message)
 
     def open_logs(icon, item):
-        os.startfile(config_module.get_logs_dir(app.base_dir))  # type: ignore[attr-defined]
+        try:
+            os.startfile(config_module.get_logs_dir(app.base_dir))  # type: ignore[attr-defined]
+        except OSError as e:
+            log.warning("ログディレクトリを開けませんでした: %s", e)
 
     def open_config(icon, item):
-        os.startfile(config_module.get_config_path(app.base_dir))  # type: ignore[attr-defined]
+        try:
+            os.startfile(config_module.get_config_path(app.base_dir))  # type: ignore[attr-defined]
+        except OSError as e:
+            log.warning("設定ファイルを開けませんでした: %s", e)
 
     def open_app(icon, item):
         # 1. ローカルのデスクトップアプリの実行可能ファイルを起動してみる
@@ -207,7 +213,7 @@ def run_tray_app(app: UpdaterApp) -> None:
                 os.startfile(desktop_exe)
                 return
             except Exception as e:
-                log.warning(f"Failed to start desktop app executable: {e}")
+                log.warning("Failed to start desktop app executable: %s", e)
 
         # 2. スタートメニューのショートカットを起動してみる
         app_data_roaming = os.environ.get("APPDATA")
@@ -218,14 +224,14 @@ def run_tray_app(app: UpdaterApp) -> None:
                     os.startfile(shortcut_path)
                     return
                 except Exception as e:
-                    log.warning(f"Failed to start desktop app shortcut: {e}")
+                    log.warning("Failed to start desktop app shortcut: %s", e)
 
         # 3. フォールバック: WebUIをブラウザで開く
         try:
             import webbrowser
             webbrowser.open(app.config.webui_base_url)
         except Exception as e:
-            log.error(f"Failed to open WebUI fallback: {e}")
+            log.error("Failed to open WebUI fallback: %s", e)
 
     def reload_config_action(icon, item):
         app.reload_config()

@@ -172,4 +172,4 @@ class ApplyResult:
     target: Literal["webui", "agent"]
     success: bool
     aborted_reason: Optional[str] = None
-    steps: list = field(default_factory=list)  # list[StepResult]
+    steps: list[StepResult] = field(default_factory=list)
