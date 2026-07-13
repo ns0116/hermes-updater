@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Optional
 
 from hermes_updater.logger import get_logger
-from hermes_updater.models import CheckResult
+from hermes_updater.models import CheckResult, StepResult
 
 log = get_logger("notifier")
 
@@ -81,6 +81,19 @@ def notify_apply_start(targets: list[str]) -> None:
     """Issue #9: 更新適用開始時のトースト通知(これまで開始通知が一切無かった)。"""
     labels = [_TARGET_LABELS.get(t, t) for t in targets]
     notify("Hermes Updater", f"{' / '.join(labels)} の更新を開始します")
+
+
+def notify_apply_step(target: str, step: StepResult) -> None:
+    """適用中、GUIなしでも各ステップの進行が分かるようステップ完了ごとに通知する
+    (トレイアイコンのツールチップだけではホバーしないと気づけないため)。
+    """
+    label = _TARGET_LABELS.get(target, target)
+    desc = describe_step(step.name)
+    if step.success:
+        notify("Hermes Updater", f"{label}: {desc} - 完了")
+    else:
+        detail = step.detail[:200] if step.detail else "詳細不明"
+        notify("Hermes Updater", f"{label}: {desc} - 失敗\n{detail}")
 
 
 def notify_apply_result(target: str, success: bool, aborted_reason: Optional[str]) -> None:

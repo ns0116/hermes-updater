@@ -117,14 +117,7 @@ def _load_and_build_status_icons(app: UpdaterApp) -> tuple[Image.Image, Image.Im
 
 
 def run_tray_app(app: UpdaterApp) -> None:
-    """トレイアイコンを表示し、tkinterのメインループを回す。"""
-    import tkinter as tk
-    from hermes_updater.gui import UpdaterGUI
-
-    root = tk.Tk()
-    root.withdraw()  # 初期状態ではウィンドウを非表示にする
-
-    gui = UpdaterGUI(root, app)
+    """トレイアイコンを表示し、メインスレッドをブロックする(Windowsではメインスレッド必須)。"""
     icon: pystray.Icon
 
     # アイコン群をビルド
@@ -137,33 +130,26 @@ def run_tray_app(app: UpdaterApp) -> None:
             return icon_pending
         return icon_idle
 
-    def show_gui_safe() -> None:
-        root.after(0, gui.show)
-
     def on_update_available(result: CheckResult) -> None:
         notifier.notify_update_available(result)
-        gui.queue.put(("status_update", None))
 
     def on_check_undetermined(result: CheckResult) -> None:
         notifier.notify_check_undetermined(result)
-        gui.queue.put(("status_update", None))
 
     def on_check_complete(result: CheckResult) -> None:
         # 通知の要否とは無関係に、チェックのたびに必ずアイコンを最新状態へ反映する
         icon.icon = _select_icon_for_state()
-        gui.queue.put(("status_update", None))
 
     def on_apply_start(targets: list[str]) -> None:
         # Issue #9: 適用開始が全く見えない問題への対応(専用アイコン状態 + 開始トースト)
         icon.icon = icon_applying
         icon.title = "Hermes Updater - 更新を適用中..."
         notifier.notify_apply_start(targets)
-        gui.queue.put(("apply_start", targets))
 
     def on_apply_step(target: str, step) -> None:
         # Issue #9: 主要ステップ(WebUI停止/Agent更新/WebUI再起動)ごとの簡易進捗表示
         icon.title = f"Hermes Updater - {target}: {notifier.describe_step(step.name)}"
-        gui.queue.put(("apply_step", (target, step)))
+        notifier.notify_apply_step(target, step)
 
     app.on_update_available = on_update_available
     app.on_check_undetermined = on_check_undetermined
@@ -176,13 +162,36 @@ def run_tray_app(app: UpdaterApp) -> None:
 
     def make_apply_action(targets: list[str]):
         def _action(icon, item):
-            show_gui_safe()
-            # GUI経由で適用プロセスを呼び出す
-            root.after(0, gui.trigger_apply)
+            def _run():
+                try:
+                    results = app.apply_now(targets)
+                except Exception:
+                    # apply_now自体が予期せず例外を投げた場合、適用中アイコンで固まらないよう復旧する
+                    log.exception("apply_now (triggered from tray menu) crashed")
+                    icon.title = "Hermes Updater"
+                    icon.icon = _select_icon_for_state()
+                    return
+                if not results:
+                    # 別の適用が進行中で今回は多重実行防止により何もしていない
+                    notifier.notify("Hermes Updater", "既に更新を適用中です。しばらく待ってからお試しください。")
+                    return
+                try:
+                    for name, result in results.items():
+                        notifier.notify_apply_result(name, result.success, result.aborted_reason)
+                    # 適用後の実際の状態を反映させるため再チェックする(on_check_completeがアイコンを更新する)
+                    app.check_now()
+                except Exception:
+                    log.exception("post-apply notify/check failed")
+                finally:
+                    icon.title = "Hermes Updater"
+                    icon.icon = _select_icon_for_state()
+            threading.Thread(target=_run, daemon=True).start()
         return _action
 
     def show_status(icon, item):
-        show_gui_safe()
+        r = app.state.last_check_result
+        message = f"Agent: {r.agent_behind}件 / WebUI: {r.webui_behind}件\n取得経路: {r.source}"
+        notifier.notify("Hermes Updater - 状態", message)
 
     def open_logs(icon, item):
         try:
@@ -231,19 +240,16 @@ def run_tray_app(app: UpdaterApp) -> None:
         nonlocal icon_idle, icon_pending, icon_attention, icon_applying
         icon_idle, icon_pending, icon_attention, icon_applying = _load_and_build_status_icons(app)
         icon.icon = _select_icon_for_state()
-        gui.queue.put(("status_update", None))
         notifier.notify("Hermes Updater", "設定を再読み込みしました")
 
     def quit_action(icon, item):
         app.stop()
         icon.stop()
-        root.quit()
-        root.destroy()
 
     menu = pystray.Menu(
-        pystray.MenuItem("Hermes Updaterを開く", lambda icon, item: show_gui_safe(), default=True),
-        pystray.MenuItem("公式Hermesを開く", open_app),
+        pystray.MenuItem("Hermesを開く", open_app, default=True),
         pystray.MenuItem("今すぐチェック", check_now_action),
+        pystray.MenuItem("状態を表示", show_status),
         pystray.MenuItem(
             "更新を適用",
             pystray.Menu(
@@ -262,10 +268,5 @@ def run_tray_app(app: UpdaterApp) -> None:
     icon = pystray.Icon("hermes_updater", initial_icon, "Hermes Updater", menu)
 
     app.start_background()
-
-    # pystrayのトレイアイコンを別スレッドで実行
-    threading.Thread(target=icon.run, name="hermes-updater-tray", daemon=True).start()
-
-    # メインスレッドでtkinterメインループを実行
-    root.mainloop()
+    icon.run()
 
