@@ -262,7 +262,7 @@ def run_tray_app(app: UpdaterApp) -> None:
     icon = pystray.Icon("hermes_updater", initial_icon, "Hermes Updater", menu)
 
     app.start_background()
-    
+
     # pystrayのトレイアイコンを別スレッドで実行
     threading.Thread(target=icon.run, name="hermes-updater-tray", daemon=True).start()
 
