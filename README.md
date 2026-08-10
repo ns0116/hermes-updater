@@ -100,6 +100,20 @@ python -m hermes_updater                  # 引数なし: トレイ常駐アプ�
 
 状態(`state.json`)とログ(`logs/updater.log`、5MB×5世代ローテーション)も同じディレクトリ配下に保存されます。
 
+## 関連情報
+
+### WebUI不要な場合の1コマンド更新（個人環境）
+
+WebUIの自動再起動やAgent/WebUI個別チェックが不要で、単に手動更新手順（Gateway停止→`hermes update`）だけをまとめたい場合は、PowerShellプロファイルに以下のような関数を定義しておくと`hermes-update`の1コマンドで済みます（このリポジトリの一部ではなく、利用者側のプロファイルに置く前提のスニペットです）:
+
+```powershell
+function hermes-update {
+    Write-Host "Stopping Hermes gateway..." -ForegroundColor Cyan
+    hermes gateway stop
+    hermes update
+}
+```
+
 ## ライセンス
 
 [MIT](LICENSE)
