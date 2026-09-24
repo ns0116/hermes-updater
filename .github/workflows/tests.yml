@@ -24,3 +24,17 @@ jobs:
         run: ruff check src/
       - name: Run tests
         run: pytest tests/ -v --cov=hermes_updater --cov-report=xml --cov-report=term-missing
+
+  install-linux:
+    # Windows専用パッケージ（pystray/win11toast）にプラットフォームマーカーを付けた効果を検証する軽量ジョブ。
+    # pytestは実行せず、pip installが通ることのみを確認する（本体機能はWindows専用のため）。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies (Linux install check)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
