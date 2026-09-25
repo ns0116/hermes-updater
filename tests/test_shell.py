@@ -96,6 +96,31 @@ def test_start_scheduled_task_escapes_task_name(monkeypatch):
     assert "Bob''s WebUI Task" in captured["script"]
 
 
+def _capture_subprocess_run(monkeypatch):
+    captured = {}
+
+    def fake_subprocess_run(args, **kwargs):
+        captured.update(kwargs)
+        return shell.subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(shell.subprocess, "run", fake_subprocess_run)
+    return captured
+
+
+def test_run_passes_creationflags_on_windows(monkeypatch):
+    captured = _capture_subprocess_run(monkeypatch)
+    monkeypatch.setattr(shell.sys, "platform", "win32")
+    assert shell.run(["echo"]).success
+    assert captured["creationflags"] == shell.CREATE_NO_WINDOW
+
+
+def test_run_omits_creationflags_on_non_windows(monkeypatch):
+    captured = _capture_subprocess_run(monkeypatch)
+    monkeypatch.setattr(shell.sys, "platform", "linux")
+    assert shell.run(["echo"]).success
+    assert "creationflags" not in captured
+
+
 def test_run_elevated_distinguishes_timeout_from_generic_failure(monkeypatch):
     monkeypatch.setattr(
         shell, "run_powershell", lambda script, timeout=None: ShellResult(-1, timed_out=True)

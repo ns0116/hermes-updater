@@ -1,12 +1,14 @@
 # AUDIT.md — hermes-updater
 
 作成日: 2026-09-24
-更新日: 2026-09-24（対応状況追記）
+更新日: 2026-09-25（高2・高3 対応済みを追記）
 
 ## 対応状況（2026-09-24）
 
 - ✅ **対応済み**（高1）: `pyproject.toml`の`pystray`・`win11toast`に`sys_platform == "win32"`の環境マーカーを付与（別コミット`be44968`）。あわせてLinux上での`pip install -e ".[dev]"`可否を検証する軽量CIジョブ（`install-linux`）を追加（本コミット）。
-- 未対応: 高2（`shell.py`の`creationflags`プラットフォーム分岐）、高3（CLAUDE.mdへのクラウドセッション作業範囲の明記）、中4-6、低7-8は今回のスコープ外（実装は未着手）。
+- ✅ **対応済み**（高2、2026-09-25）: `shell.py`の`run()`で`creationflags=CREATE_NO_WINDOW`を`sys.platform == "win32"`のときだけ渡すようガード（非Windowsでの`ValueError`を回避）。Windows/非Windows双方の分岐を検証するテストを`tests/test_shell.py`に追加。
+- ✅ **対応済み**（高3、2026-09-25）: `CLAUDE.md`のガードレール節末尾に「クラウドセッションでの作業範囲」（実Hermes Agent・実プロセス・タスクスケジューラ前提の操作は実行不可、コード変更・`pytest`・ドキュメント更新に限定）を追記。ガードレール自体は変更なし。
+- 未対応: 中4-6、低7-8は今回のスコープ外（実装は未着手）。
 
 調査範囲: `D:\Naoyuki\Projects\hermes-updater` 配下全体（読み取り専用調査。このファイル以外は一切変更していない）
 

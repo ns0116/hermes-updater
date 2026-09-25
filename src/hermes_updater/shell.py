@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from typing import Optional
@@ -36,6 +37,8 @@ class ShellResult:
 def run(args: list[str], timeout: Optional[float] = None, cwd: Optional[str] = None) -> ShellResult:
     """通常権限でコマンドを実行する。"""
     log.debug("run: %s", " ".join(args))
+    # creationflagsはWindows専用引数(非Windowsで非0を渡すとValueError)のため、win32のときだけ渡す
+    extra = {"creationflags": CREATE_NO_WINDOW} if sys.platform == "win32" else {}
     try:
         proc = subprocess.run(
             args,
@@ -44,7 +47,7 @@ def run(args: list[str], timeout: Optional[float] = None, cwd: Optional[str] = N
             errors="replace",
             timeout=timeout,
             cwd=cwd,
-            creationflags=CREATE_NO_WINDOW,
+            **extra,
         )
         return ShellResult(returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr)
     except subprocess.TimeoutExpired as e:
