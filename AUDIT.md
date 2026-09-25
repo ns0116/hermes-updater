@@ -1,14 +1,30 @@
 # AUDIT.md — hermes-updater
 
 作成日: 2026-09-24
-更新日: 2026-09-25（高2・高3 対応済みを追記）
+更新日: 2026-09-25
 
-## 対応状況（2026-09-24）
+## 完了状況（最終確認: 2026-09-25）
 
-- ✅ **対応済み**（高1）: `pyproject.toml`の`pystray`・`win11toast`に`sys_platform == "win32"`の環境マーカーを付与（別コミット`be44968`）。あわせてLinux上での`pip install -e ".[dev]"`可否を検証する軽量CIジョブ（`install-linux`）を追加（本コミット）。
-- ✅ **対応済み**（高2、2026-09-25）: `shell.py`の`run()`で`creationflags=CREATE_NO_WINDOW`を`sys.platform == "win32"`のときだけ渡すようガード（非Windowsでの`ValueError`を回避）。Windows/非Windows双方の分岐を検証するテストを`tests/test_shell.py`に追加。
-- ✅ **対応済み**（高3、2026-09-25）: `CLAUDE.md`のガードレール節末尾に「クラウドセッションでの作業範囲」（実Hermes Agent・実プロセス・タスクスケジューラ前提の操作は実行不可、コード変更・`pytest`・ドキュメント更新に限定）を追記。ガードレール自体は変更なし。
-- 未対応: 中4-6、低7-8は今回のスコープ外（実装は未着手）。
+> 状態はこの表が正。下の監査本文は 2026-09-24 監査時点の記録（原文のまま）。
+
+**総合: 🟡 高は完了 / 残り 5件（中3・低2）**
+
+| 優先度 | 完了 | 残り |
+|---|---|---|
+| 高 | 3/3 | 0 |
+| 中 | 0/3 | 3 |
+| 低 | 0/2 | 2 |
+
+| # | 優先度 | 項目 | 状態 | 備考 |
+|---|---|---|---|---|
+| 1 | 高 | pystray/win11toastにwin32環境マーカー付与 | ✅ 2026-09-24 | `be44968`。Linuxでのpip install検証CIジョブ（`install-linux`）も追加: `3da3037` |
+| 2 | 高 | shell.pyのcreationflagsをWindows限定にする | ✅ 2026-09-25 | `162a8c8`。Windows/非Windows双方の分岐テストを`tests/test_shell.py`に追加 |
+| 3 | 高 | CLAUDE.mdにクラウドセッションの作業範囲を追記 | ✅ 2026-09-25 | `162a8c8`。ガードレール節末尾に追記、ガードレール自体は変更なし |
+| 4 | 中 | README/CLAUDE.mdにCI構成（Windows専用）を明記 | ⬜ 未対応 | README・CLAUDE.mdともCIへの言及なし（なお`install-linux`ジョブ追加で「Windows専用」ではなくなった点も反映が必要） |
+| 5 | 中 | ui.pyのpystray/PIL importを遅延import化 | ⬜ 未対応 | `ui.py`冒頭で即時importのまま |
+| 6 | 中 | CLAUDE.mdに「CLAUDE.local.mdはクラウドで参照不可」を追記 | ⬜ 未対応 | `CLAUDE.md:55`は「ローカル環境のみ」の記載のまま |
+| 7 | 低 | `.claude/`丸ごとgitignoreの是非を検討 | ⏸ 保留 | `.claude/`共有方針のユーザー判断が必要（共有予定が無ければ現状維持で可） |
+| 8 | 低 | install/*.ps1にクラウド実行対象外のコメント追加 | ⬜ 未対応 | 任意項目 |
 
 調査範囲: `D:\Naoyuki\Projects\hermes-updater` 配下全体（読み取り専用調査。このファイル以外は一切変更していない）
 
