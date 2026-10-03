@@ -1,0 +1,7 @@
+# 改行は LF に統一する（Windows の core.autocrlf=true に左右されないように）
+* text=auto eol=lf
+
+# Windows でしか動かないもの
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
