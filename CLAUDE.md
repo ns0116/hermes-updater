@@ -1,6 +1,8 @@
 # hermes-updater — Claude Context
 
 > 核のみを保持。詳細は `docs/` を参照。
+>
+> **引退済み（2026-10-02）**: スケジュールタスクを削除し、事実上運用していない。コードと専用venvは残置。
 
 ## 概要
 
@@ -46,10 +48,14 @@ Hermes Agent（`C:\Users\<username>\AppData\Local\hermes`）とコミュニテ�
 - 実装順序は`docs/IMPLEMENTATION_PLAN.md`「10. 段階的な実装順序」（コア基盤→更新ランナー→スケジューラ→トレイUI→インストーラ→結合テスト）に従う
 - Agent側の更新は必ず`hermes update` CLI経由（WebUIの`/api/updates/apply`をAgent対象には使わない — 依存関係同期が行われない可能性があるため。詳細は実装計画書2.1節）
 
+## CI
+
+`.github/workflows/tests.yml`: `pytest`（windows-latest）と、Linuxでの`pip install`検証（`install-linux`、ubuntu-latest）の2ジョブ。
+
 ## 参照ドキュメント
 
 | ファイル | 内容 |
 |---|---|
 | [`docs/PRD.md`](docs/PRD.md) | 要求仕様（スコープ・機能要件・非機能要件・成功指標） |
 | [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | 実装計画（アーキテクチャ・更新シーケンス・エラーハンドリング・検証シナリオ） |
-| `CLAUDE.local.md`（非公開・gitignore対象） | Phase 14/16: 手動運用時代の詳細記録・本プロジェクトが自動化しようとしている手順の原典（ローカル環境のみ） |
+| `CLAUDE.local.md`（非公開・gitignore対象） | Phase 14/16: 手動運用時代の詳細記録・本プロジェクトが自動化しようとしている手順の原典（ローカル環境のみ。クラウドセッションでは参照不可） |

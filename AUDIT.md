@@ -1,30 +1,30 @@
 # AUDIT.md — hermes-updater
 
 作成日: 2026-09-24
-更新日: 2026-09-25
+更新日: 2026-10-04
 
-## 完了状況（最終確認: 2026-09-25）
+## 完了状況（最終確認: 2026-10-04）
 
 > 状態はこの表が正。下の監査本文は 2026-09-24 監査時点の記録（原文のまま）。
 
-**総合: 🟡 高は完了 / 残り 5件（中3・低2）**
+**総合: ✅ 完了（2026-10-02 に引退済みのため、残件は対応または対応不要として閉じた。#7 のみ保留）**
 
 | 優先度 | 完了 | 残り |
 |---|---|---|
 | 高 | 3/3 | 0 |
-| 中 | 0/3 | 3 |
-| 低 | 0/2 | 2 |
+| 中 | 3/3 | 0 |
+| 低 | 0/2 | 2（対応不要1・保留1） |
 
 | # | 優先度 | 項目 | 状態 | 備考 |
 |---|---|---|---|---|
 | 1 | 高 | pystray/win11toastにwin32環境マーカー付与 | ✅ 2026-09-24 | `be44968`。Linuxでのpip install検証CIジョブ（`install-linux`）も追加: `3da3037` |
 | 2 | 高 | shell.pyのcreationflagsをWindows限定にする | ✅ 2026-09-25 | `162a8c8`。Windows/非Windows双方の分岐テストを`tests/test_shell.py`に追加 |
 | 3 | 高 | CLAUDE.mdにクラウドセッションの作業範囲を追記 | ✅ 2026-09-25 | `162a8c8`。ガードレール節末尾に追記、ガードレール自体は変更なし |
-| 4 | 中 | README/CLAUDE.mdにCI構成（Windows専用）を明記 | ⬜ 未対応 | README・CLAUDE.mdともCIへの言及なし（なお`install-linux`ジョブ追加で「Windows専用」ではなくなった点も反映が必要） |
-| 5 | 中 | ui.pyのpystray/PIL importを遅延import化 | ⬜ 未対応 | `ui.py`冒頭で即時importのまま |
-| 6 | 中 | CLAUDE.mdに「CLAUDE.local.mdはクラウドで参照不可」を追記 | ⬜ 未対応 | `CLAUDE.md:55`は「ローカル環境のみ」の記載のまま |
+| 4 | 中 | README/CLAUDE.mdにCI構成（Windows専用）を明記 | ✅ 2026-10-04 | README・CLAUDE.mdともCIへの言及なし（なお`install-linux`ジョブ追加で「Windows専用」ではなくなった点も反映が必要）。CLAUDE.mdにCI節を追加（pytest=Windows、install-linux=Linux） |
+| 5 | 中 | ui.pyのpystray/PIL importを遅延import化 | ➖ 対応不要 | `ui.py`冒頭で即時importのまま。2026-10-02に引退、タスク削除済み。今後の開発前提の改善のため |
+| 6 | 中 | CLAUDE.mdに「CLAUDE.local.mdはクラウドで参照不可」を追記 | ✅ 2026-10-04 | `CLAUDE.md:55`は「ローカル環境のみ」の記載のまま。CLAUDE.mdの参照表に「クラウドセッションでは参照不可」を追記 |
 | 7 | 低 | `.claude/`丸ごとgitignoreの是非を検討 | ⏸ 保留 | `.claude/`共有方針のユーザー判断が必要（共有予定が無ければ現状維持で可） |
-| 8 | 低 | install/*.ps1にクラウド実行対象外のコメント追加 | ⬜ 未対応 | 任意項目 |
+| 8 | 低 | install/*.ps1にクラウド実行対象外のコメント追加 | ➖ 対応不要 | 2026-10-02に引退、タスク削除済み。任意項目のため |
 
 調査範囲: `D:\Naoyuki\Projects\hermes-updater` 配下全体（読み取り専用調査。このファイル以外は一切変更していない）
 

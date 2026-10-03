@@ -1,5 +1,7 @@
 # Hermes Updater
 
+> **引退済み（2026-10-02）**: スケジュールタスクを削除し、現在は運用していません。コードと専用venvは残置しています。
+
 Hermes Agent（[hermes-agent](https://github.com/nousresearch/hermes-agent) 相当のネイティブWindowsインストール）とコミュニティ製Web UI（[hermes-webui](https://github.com/nesquena/hermes-webui)）の更新を、定期チェック → トースト通知 → ユーザー承認 → 安全な手順で自動適用する、Windowsシステムトレイ常駐アプリです。
 
 背景・要件の詳細は [`docs/PRD.md`](docs/PRD.md)、アーキテクチャの詳細は [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) を参照してください。
