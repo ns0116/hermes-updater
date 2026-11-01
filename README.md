@@ -2,7 +2,7 @@
 
 > **引退済み（2026-10-02）**: スケジュールタスクを削除し、現在は運用していません。コードと専用venvは残置しています。
 
-Hermes Agent（[hermes-agent](https://github.com/nousresearch/hermes-agent) 相当のネイティブWindowsインストール）とコミュニティ製Web UI（[hermes-webui](https://github.com/nesquena/hermes-webui)）の更新を、定期チェック → トースト通知 → ユーザー承認 → 安全な手順で自動適用する、Windowsシステムトレイ常駐アプリです。
+Hermes Agent（[hermes-agent](https://github.com/nousresearch/hermes-agent) 相当のネイティブWindowsインストール）とコミュニティ製Web UI（[hermes-webui](https://github.com/nesquena/hermes-webui)）の更新を管理する、Windowsシステムトレイ常駐アプリです。定期チェックからトースト通知、ユーザー承認を経て、安全な手順で更新を自動適用します。
 
 背景・要件の詳細は [`docs/PRD.md`](docs/PRD.md)、アーキテクチャの詳細は [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) を参照してください。
 
@@ -54,7 +54,7 @@ python -m venv .venv
 
 ## 使い方
 
-トレイアイコンは`hermes-agent`の公式ロゴ(`hermes_install_path`配下から自動検出)にステータスバッジを重ねて表示します: 緑=通常、オレンジ=更新あり、赤=要確認(更新有無が判定不能。venv破損等の異常系の可能性)。ロゴが見つからない場合は色分けした丸アイコンにフォールバックします。
+トレイアイコンは、`hermes-agent`の公式ロゴ（`hermes_install_path`配下から自動検出）にステータスバッジを重ねて表示します。バッジの色は緑（通常）、オレンジ（更新あり）、赤（要確認：更新有無が判定不能、venv破損等の異常系の可能性）の3種類です。ロゴが見つからない場合は色分けした丸アイコンで表示します。
 
 ダブルクリック(既定のメニュー項目)でHermesのデスクトップアプリを開きます。デスクトップアプリの実行ファイルが見つからない場合はスタートメニューのショートカット、それも無ければWebUIをブラウザで開くところまでフォールバックします。
 
