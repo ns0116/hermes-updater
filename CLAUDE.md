@@ -35,7 +35,7 @@ Hermes Agent（`C:\Users\<username>\AppData\Local\hermes`）とコミュニテ�
 - `hermes-webui`リポジトリへの`git pull`実行（実ファイルを書き換えるため）
 
 **禁止**:
-- `hermes-agent`のvenv（`C:\Users\<username>\AppData\Local\hermes\hermes-agent\venv`）に対する`uv sync`等の直接操作（[[feedback_hermes_uv_sync]]の教訓。遅延インストール済みバックエンドとvenv内`pip`モジュールを消失させた実績あり。必ず正規の`hermes`公式CLI経由で操作する）
+- `hermes-agent`のvenv（`C:\Users\<username>\AppData\Local\hermes\hermes-agent\venv`）に対する`uv sync`等の直接操作（[[feedback_hermes_uv_sync]]の教訓。遅延インストール済みバックエンドとvenv内`pip`モジュールを消失させた前例あり。必ず正規の`hermes`公式CLI経由で操作する）
 - `.env`・APIキー等の秘密情報を含むファイルのcommit
 - ユーザー承認なしに`auto_apply_updates`（完全無人更新）を有効化する、または既定でONにする実装をする
 - 自動リトライの実装（PRD/実装計画で明示的に「自動リトライしない」方針としている）
