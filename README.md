@@ -1,5 +1,9 @@
 # Hermes Updater
 
+> **保守は終了しました（2026-11-07）**: このリポジトリは更新しません。コードは参照用に残しています。
+>
+> **No longer maintained (2026-11-07)**: This repository will not be updated. The code is kept for reference.
+
 > **引退済み（2026-10-02）**: スケジュールタスクを削除し、現在は運用していません。コードと専用venvは残置しています。
 
 Hermes Agent（[hermes-agent](https://github.com/nousresearch/hermes-agent) 相当のネイティブWindowsインストール）とコミュニティ製Web UI（[hermes-webui](https://github.com/nesquena/hermes-webui)）の更新を管理する、Windowsシステムトレイ常駐アプリです。定期チェックからトースト通知、ユーザー承認を経て、安全な手順で更新を自動適用します。
